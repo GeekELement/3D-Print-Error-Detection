@@ -1,145 +1,205 @@
-# 3D打印缺陷智能检测与交互式处理系统
+# 3D打印缺陷检测与告警系统
 
-[![Python](https://img.shields.io/badge/Python-3.6%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.x-green)](https://opencv.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.7%2B-red)](https://pytorch.org/)
 [![YOLOv8](https://img.shields.io/badge/YOLO-v8-orange)](https://github.com/ultralytics/yolov8)
 
 ## 项目简介
 
-本项目是一个部署在3D打印机上位机（如树莓派）上的智能监控系统。它利用 **YOLOv8** 深度学习模型，周期性地对打印过程进行视觉检测。一旦识别到打印缺陷，系统会通过邮件向用户告警，并根据用户的邮件回复或超时机制，自动执行相应的控制命令（停止打印或进入静默期），有效减少材料浪费和时间损失。
+本项目是一个轻量级的3D打印缺陷检测与告警系统，运行在3D打印机上位机（如树莓派、服务器或PC）上。系统通过摄像头周期性捕获打印过程的图像，使用YOLOv8深度学习模型进行缺陷检测，并在发现异常时通过邮件发送告警通知，帮助用户及时发现和处理打印问题，减少材料浪费和时间损失。
 
 ## 核心功能
 
-- **⏰ 定时监控**：每分钟自动捕获一次打印画面。
-- **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷（如翘边、拉丝、层错位等）。
-- **📧 邮件交互**：发现缺陷后，自动发送包含操作指引的告警邮件。
-- **👤 人工决策**：用户可通过回复邮件内容（“1”或“2”）来决策下一步行动。
-- **🤖 自动执行**：根据用户指令或超时规则，自动调用OctoPrint API控制打印机。
-- **🔕 静默模式**：用户可指令系统在指定时间内暂停告警。
+- **摄像头监控**：定期捕获3D打印过程的图像
+- **智能缺陷检测**：使用YOLOv8模型实时分析图像，检测打印缺陷
+- **邮件告警**：当检测到高置信度缺陷时，发送带预测结果图片的邮件告警
+- **图片管理**：自动保存原始捕获图像和带标注的预测结果图像
+- **OctoPrint集成**：提供OctoPrint控制接口（可扩展实现自动停止打印等功能）
 
-## 系统架构与工作流程
+## 项目结构
 
-```mermaid
-graph TD
-    A[主循环启动] --> B{是否处于静默模式？};
-    B -- 是 --> C[等待1分钟];
-    B -- 否 --> D[USB摄像头抓图];
-    D --> E[YOLOv8模型推理];
-    E --> F{是否发现缺陷？};
-    F -- 否 --> C;
-    F -- 是 --> G[发送告警邮件];
-    G --> H{等待用户回复<br>10分钟超时};
-    H -- 收到回复'1' --> I[停止打印];
-    H -- 收到回复'2' --> J[进入1小时静默模式];
-    H -- 超时未回复 --> I;
+```
+3D_Print_Error_Detection/
+├── README.md              # 项目说明文件
+├── yolov8n.pt             # YOLOv8模型权重文件
+├── src/
+│   ├── main.py            # 主程序入口
+│   ├── camera_capture.py  # 摄像头操作模块
+│   ├── notify.py          # 邮件通知模块
+│   └── octoprint_client.py # OctoPrint控制模块
+├── images/
+│   ├── predicted_pictures/ # 预测结果图片保存目录
+│   └── saved_pictures/     # 原始捕获图片保存目录
+└── YOLOv8_cs-main/         # YOLOv8相关代码和文档
 ```
 
 ## 技术栈
 
-- **编程语言**: Python 3
-- **深度学习框架**: PyTorch, YOLOv8
-- **计算机视觉库**: OpenCV
-- **邮件协议**: SMTP (发件), IMAP (收件)
-- **控制API**: OctoPrint REST API
+- **编程语言**：Python 3.8+
+- **核心库**：
+  - `ultralytics` - YOLOv8模型推理
+  - `opencv-python` - 摄像头操作和图像处理
+  - `requests` - OctoPrint API调用
+  - `smtplib` - 邮件发送
+- **硬件要求**：
+  - 支持OpenCV的摄像头
+  - 足够运行YOLOv8模型的计算资源（建议至少2GB RAM）
 
 ## 快速开始
 
 ### 环境要求
 
-- 硬件：运行OctoPrint的上位机（如树莓派4B）、USB摄像头
-- 操作系统: Ubuntu / Debian
+- Python 3.8+
+- 支持OpenCV的摄像头
+- 网络连接（用于邮件发送和可选的OctoPrint控制）
 
 ### 安装与部署
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/your-username/your-repo-name.git
-   cd your-repo-name
+   git clone <repository-url>
+   cd 3D_Print_Error_Detection
    ```
 
 2. **安装Python依赖**
    ```bash
-   pip install -r requirements.txt
-   ```
-   核心依赖包括：`opencv-python`, `torch`, `ultralytics`, `requests`
-
-2. **配置系统参数**
-   复制并重命名 `config.example.json` 为 `config.json`，并填入您的配置：
-   ```json
-   {
-     "smtp_server": "smtp.gmail.com",
-     "smtp_port": 587,
-     "email_address": "your_email@gmail.com",
-     "email_password": "your_app_password",
-     "octoprint_api_key": "your_octoprint_api_key_here",
-     "octoprint_url": "http://localhost:5000"
-   }
+   pip install ultralytics opencv-python requests
    ```
 
-3. **配置系统服务 (用于后台运行)**
+3. **配置系统参数**
+   修改 `src/main.py` 顶部的配置常量以适配你的环境：
+
+   ```python
+   # ───────────── 配置区 ─────────────
+   MODEL_PATH = r"C:\Files\3D_Print_Error_Detection\yolov8n.pt"  # 模型路径
+   CAMERA_INDEX = 0  # 摄像头索引
+
+   INTERVAL_MIN = 0.1  # 检测间隔（分钟）
+   CONF_THRESHOLD = 0.25  # YOLO 检测阈值
+   ALERT_CONF_THRESHOLD = 0.70  # 报警阈值
+
+   PREDICTED_IMAGE_DIR = r"C:\Files\3D_Print_Error_Detection\images\predicted_pictures"  # 预测结果保存目录
+
+   EMAIL_ALERT_ENABLED = True  # 是否启用邮件告警
+   EMAIL_TO = "your-email@example.com"  # 接收告警的邮箱
+   EMAIL_FROM = "sender-email@example.com"  # 发送告警的邮箱
+   EMAIL_PASSWORD = "your-email-password"  # 邮箱授权码（不是登录密码）
+   ```
+
+   同时，你可能需要修改 `src/camera_capture.py` 中的原始图像保存路径：
+
+   ```python
+   self.save_dir = r"C:\Files\3D_Print_Error_Detection\YOLOv8_cs-main\images\saved_pictures"
+   ```
+
+4. **运行系统**
    ```bash
-   # 将服务文件复制到系统目录
-   sudo cp systemd/print_defect_monitor.service /etc/systemd/system/
- 
-   # 重载systemd配置
-   sudo systemctl daemon-reload
- 
-   # 启用并启动服务
-   sudo systemctl enable print_defect_monitor.service
-   sudo systemctl start print_defect_monitor.service
+   python src/main.py
    ```
 
-## 使用方法
+   系统将开始周期性检测，每完成一次检测会在控制台输出检测结果。当检测到高置信度缺陷时，会发送邮件告警。
 
-1. **启动系统**: 服务将在后台自动运行。
-2. **正常打印**: 系统每分钟自动检测一次，无异常时不打扰。
-3. **接收告警**: 当缺陷发生时，您会收到一封类似以下的邮件：
-   ```
-   主题： 【3D打印告警】检测到打印缺陷！
+## 使用说明
 
-   正文：
-   在您的打印任务中检测到疑似 [翘边] 缺陷。
-   请回复本邮件，输入以下数字进行操作：
-   1 - 立即停止打印
-   2 - 忽略此次告警，1小时内不再提醒
+### 邮件告警格式
 
-   【系统提示】如果您在10分钟内未回复，打印将自动停止。
-   ```
-
-4. **回复邮件决策**:
-   - 回复 `1`: 系统立即停止当前打印任务。
-   - 回复 `2`: 系统进入1小时静默模式，此间不再发送告警。
-
-## 项目目录结构
+当系统检测到高置信度缺陷时，会发送如下格式的邮件：
 
 ```
-3D-Print-Defect-Detection/
-├── README.md
-├── requirements.txt
-├── config.json
-├── main.py                 # 主程序入口
-├── src/
-│   ├── camera.py           # 摄像头操作模块
-│   ├── detector.py          # YOLOv5推理模块
-│   ├── mail_client.py       # 邮件收发模块
-│   └── octoprint_client.py # API控制模块
-├── models/
-│   └── best.pt            # 训练好的YOLOv8模型权重
-├── systemd/
-│   └── print_defect_monitor.service
-└── logs/                    # 日志目录
+主题：【紧急】3D打印检测到异常
+
+正文：
+【3D打印异常警报】
+
+检测时间：2026-01-27 19:30:00
+异常目标：warping (0.85), stringing (0.72)
+
+请尽快检查打印机状态。
+预测图片已作为附件发送。
 ```
 
-## 联系我们
+### 图片保存
 
-如有问题或建议，请通过以下方式联系：
-- 邮箱： geekelement@outlook.com
+- **原始图像**：保存在 `YOLOv8_cs-main/images/saved_pictures` 目录，文件名格式为 `print_YYYYMMDD_HHMMSS.jpg`
+- **预测结果**：保存在 `images/predicted_pictures` 目录，文件名格式为 `pred_YYYYMMDD_HHMMSS.jpg`，包含YOLOv8检测到的目标标注
+
+### OctoPrint集成（可选）
+
+项目包含 `OctoPrintClient` 类，可用于控制OctoPrint服务器。要在检测到异常时自动控制打印机，可按以下步骤扩展：
+
+1. 在 `src/main.py` 中导入并初始化 `OctoPrintClient`：
+
+   ```python
+   from octoprint_client import OctoPrintClient
+
+   # 在配置区添加
+   OCTOPRINT_URL = "http://octoprint.local:5000"
+   OCTOPRINT_API_KEY = "your-octoprint-api-key"
+
+   # 在main函数中初始化
+   octoprint_client = OctoPrintClient(OCTOPRINT_URL, OCTOPRINT_API_KEY)
+   ```
+
+2. 在检测到异常时添加控制逻辑：
+
+   ```python
+   if should_alert and EMAIL_ALERT_ENABLED:
+       # 发送邮件告警（现有代码）
+       # ...
+       
+       # 添加自动停止打印逻辑
+       try:
+           octoprint_client.stop_print()
+           print("已自动停止打印任务")
+       except Exception as e:
+           print(f"停止打印失败：{e}")
+   ```
+
+## 故障排查
+
+### 常见问题
+
+1. **无法打开摄像头**
+   - 检查 `CAMERA_INDEX` 是否正确
+   - 确保摄像头未被其他程序占用
+   - 检查摄像头驱动是否正常
+
+2. **模型加载失败**
+   - 确认 `MODEL_PATH` 指向正确的 `.pt` 文件
+   - 确保已正确安装 `ultralytics` 包
+
+3. **邮件发送失败**
+   - 验证邮件配置是否正确
+   - 确保使用的是邮箱授权码而非登录密码
+   - 检查网络连接是否正常
+   - 对于某些邮箱服务（如Gmail），可能需要开启"允许不安全应用访问"选项
+
+4. **图片保存失败**
+   - 检查保存路径是否存在，确保程序有写入权限
+   - 检查磁盘空间是否充足
+
+## 开发与扩展
+
+### 模型训练
+
+项目默认使用 `yolov8n.pt` 预训练模型，你可以根据自己的打印场景和缺陷类型，使用 `YOLOv8_cs-main` 目录中的工具训练自定义模型，提高检测准确率。
+
+### 功能扩展
+
+- **Web界面**：添加Web界面实时查看监控画面和检测结果
+- **多摄像头支持**：扩展系统支持多个摄像头从不同角度监控
+- **短信告警**：集成短信服务，在没有网络邮件的环境下也能收到告警
+- **自动修复建议**：基于检测到的缺陷类型，提供可能的解决方案建议
 
 ## 许可证
 
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
 
+## 联系我们
+
+如有问题或建议，欢迎提出Issue或Pull Request。
+
 ---
 
-**注意**：在使用前，请确保您已训练好适用于您打印场景的YOLOv5模型 (`best.pt`)。
+**注意**：在使用本系统前，请确保你已了解并遵守相关法律法规，特别是关于摄像头使用和数据隐私的规定。
