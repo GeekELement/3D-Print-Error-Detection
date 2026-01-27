@@ -8,14 +8,14 @@ from notify import send_email_alert   # 只使用这一套邮件接口
 
 
 # ───────────── 配置区 ─────────────
-MODEL_PATH = r"C:\Files\3D_Print_Error_Detection\YOLOv8_cs-main\yolov8n.pt"
+MODEL_PATH = r"C:\Files\3D_Print_Error_Detection\yolov8n.pt"
 CAMERA_INDEX = 0
 
 INTERVAL_MIN = 0.1                   # 检测间隔（分钟）
 CONF_THRESHOLD = 0.25                # YOLO 检测阈值
 ALERT_CONF_THRESHOLD = 0.70          # 报警阈值
 
-PREDICTED_IMAGE_DIR = r"C:\Files\3D_Print_Error_Detection\YOLOv8_cs-main\images\predicted_pictures"
+PREDICTED_IMAGE_DIR = r"C:\Files\3D_Print_Error_Detection\images\predicted_pictures"
 
 EMAIL_ALERT_ENABLED = True
 EMAIL_TO = "geekelement@outlook.com"
