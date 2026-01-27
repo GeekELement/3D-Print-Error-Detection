@@ -1,0 +1,13 @@
+{
+  "camera_index": 0,
+  "model_path": "models/best.pt",
+  "smtp_server": "smtp.gmail.com",
+  "smtp_port": 587,
+  "imap_server": "imap.gmail.com",
+  "imap_port": 993,
+  "email_address": "your_email@gmail.com",
+  "email_password": "your_app_password",
+  "recipient_email": "your_email@gmail.com",
+  "octoprint_url": "http://localhost:5000",
+  "octoprint_api_key": "your_octoprint_api_key_here"
+}

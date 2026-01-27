@@ -1,0 +1,13 @@
+train: C:\Files\YOLO_V5_3DMODEL\YOLOv8_cs-main\datasets\train\images
+val: C:\Files\YOLO_V5_3DMODEL\YOLOv8_cs-main\datasets\valid\images
+test: C:\Files\YOLO_V5_3DMODEL\YOLOv8_cs-main\datasets\test\images
+
+nc: 1
+names: ['fail']
+
+roboflow:
+  workspace: 3dprint-8uii2
+  project: 3dprinting-uo6du-jhohg
+  version: 1
+  license: Public Domain
+  url: https://universe.roboflow.com/3dprint-8uii2/3dprinting-uo6du-jhohg/dataset/1
