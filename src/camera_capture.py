@@ -10,7 +10,7 @@ class SimpleCamera:
         self.cap = None
         
         # 保存路径（可改成从配置文件读取）
-        self.save_dir = r"C:\Files\3D_Print_Error_Detection\YOLOv8_cs-main\images\saved_pictures"
+        self.save_dir = r"C:\Files\3D_Print_Error_Detection\images\saved_pictures"
         os.makedirs(self.save_dir, exist_ok=True)
         
         # 初始化时就尝试打开（可选：也可以延迟到第一次拍摄）
