@@ -5,46 +5,38 @@ from datetime import datetime
 from ultralytics import YOLO
 from camera_capture import SimpleCamera
 from notify import send_email_alert   # 只使用这一套邮件接口
-
-
-# ───────────── 配置区 ─────────────
-MODEL_PATH = r"C:\Files\Projects\3D_Print_Error_Detection\yolov8n.pt"
-CAMERA_INDEX = 0
-
-INTERVAL_MIN = 0.1                   # 检测间隔（分钟）
-CONF_THRESHOLD = 0.25                # YOLO 检测阈值
-ALERT_CONF_THRESHOLD = 0.70          # 报警阈值
-
-PREDICTED_IMAGE_DIR = r"C:\Files\Projects\3D_Print_Error_Detection\images\predicted_pictures"
-
-EMAIL_ALERT_ENABLED = True
-EMAIL_TO = "geekelement@outlook.com"
-EMAIL_FROM = "geekelement@foxmail.com"
-EMAIL_PASSWORD = "uxdrpmvghbffdbbj"  # 授权码（不是QQ密码）
+from config_loader import config      # 导入 YAML 配置
 
 
 # ───────────── 主程序 ─────────────
 def main():
-    os.makedirs(PREDICTED_IMAGE_DIR, exist_ok=True)
+    # 验证配置
+    errors = config.validate()
+    if errors:
+        print("配置验证失败：")
+        for error in errors:
+            print(f"  - {error}")
+        return
 
     print("初始化摄像头...")
-    camera = SimpleCamera(camera_index=CAMERA_INDEX)
+    camera = SimpleCamera(camera_index=config.get_int('camera.index', 0))
 
     print("加载 YOLOv8 模型...")
     try:
-        model = YOLO(MODEL_PATH)
+        model = YOLO(config.get_str('model_path_abs', ''))
         print("模型加载完成")
     except Exception as e:
         print(f"模型加载失败：{e}")
         return
 
-    print(f"开始监控，每 {INTERVAL_MIN} 分钟检测一次（Ctrl+C 退出）")
+    interval_min = config.get_float('monitoring.interval_min', 0.1)
+    print(f"开始监控，每 {interval_min} 分钟检测一次（Ctrl+C 退出）")
     last_time = time.time()
 
     try:
         while True:
             now = time.time()
-            if now - last_time >= INTERVAL_MIN * 60:
+            if now - last_time >= interval_min * 60:
                 ts_human = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n[{ts_human}] 开始新一轮检测...")
 
@@ -52,11 +44,14 @@ def main():
                 image_path = camera.capture_and_save(prefix="print")
 
                 # 2️⃣ YOLO 推理
-                results = model(image_path, conf=CONF_THRESHOLD, verbose=False)[0]
+                conf_threshold = config.get_float('model.conf_threshold', 0.25)
+                results = model(image_path, conf=conf_threshold, verbose=False)[0]
 
                 detected_info = []
                 should_alert = False
                 alert_details = []
+
+                alert_conf_threshold = config.get_float('model.alert_conf_threshold', 0.70)
 
                 for box in results.boxes:
                     cls_name = results.names[int(box.cls)]
@@ -64,7 +59,7 @@ def main():
 
                     detected_info.append(f"{cls_name} ({conf:.2f})")
 
-                    if conf >= ALERT_CONF_THRESHOLD:
+                    if conf >= alert_conf_threshold:
                         should_alert = True
                         alert_details.append(f"{cls_name} ({conf:.2f})")
 
@@ -75,9 +70,8 @@ def main():
 
                 # 3️⃣ 保存预测图
                 ts_file = datetime.now().strftime("%Y%m%d_%H%M%S")
-                predicted_path = os.path.join(
-                    PREDICTED_IMAGE_DIR, f"pred_{ts_file}.jpg"
-                )
+                predicted_dir = config.get_str('predicted_dir_abs', '')
+                predicted_path = os.path.join(predicted_dir, f"pred_{ts_file}.jpg")
 
                 annotated = results.plot()
                 if cv2.imwrite(predicted_path, annotated):
@@ -88,7 +82,7 @@ def main():
                     continue
 
                 # 4️⃣ 发送报警邮件
-                if should_alert and EMAIL_ALERT_ENABLED:
+                if should_alert and config.get_bool('email.enabled'):
                     body = (
                         "【3D打印异常警报】\n\n"
                         f"检测时间：{ts_human}\n"
@@ -98,12 +92,14 @@ def main():
                     )
 
                     send_email_alert(
-                        to_email=EMAIL_TO,
+                        to_email=config.get_str('email.to', ''),
                         subject="【紧急】3D打印检测到异常",
                         body=body,
                         attachment_path=predicted_path,
-                        from_email=EMAIL_FROM,
-                        password=EMAIL_PASSWORD
+                        smtp_server=config.get_str('email.smtp.server', 'smtp.qq.com'),
+                        smtp_port=config.get_int('email.smtp.port', 465),
+                        from_email=config.get_str('email.from', ''),
+                        password=config.get_str('email.password', '')
                     )
 
                 last_time = now

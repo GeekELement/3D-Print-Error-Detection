@@ -1,11 +1,18 @@
 import requests
+from config_loader import config
 
 class OctoPrintClient:
-    def __init__(self, octoprint_url, api_key):
-        self.octoprint_url = octoprint_url
-        self.api_key = api_key
+    def __init__(self, octoprint_url: str = "", api_key: str = ""):
+        # 如果没有传入参数，使用配置文件中的默认值
+        self.octoprint_url = octoprint_url if octoprint_url else config.get_str('octoprint.url', '')
+        self.api_key = api_key if api_key else config.get_str('octoprint.api_key', '')
+        
+        # 检查必要的配置
+        if not self.octoprint_url or not self.api_key:
+            raise ValueError("OctoPrint URL 和 API Key 必须配置")
+        
         self.headers = {
-            'X-Api-Key': api_key,
+            'X-Api-Key': self.api_key,
             'Content-Type': 'application/json'
         }
     

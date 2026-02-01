@@ -3,14 +3,19 @@ import cv2
 import os
 from datetime import datetime
 import time
+from config_loader import config
 
 class SimpleCamera:
-    def __init__(self, camera_index: int = 0):
-        self.camera_index = camera_index
+    def __init__(self, camera_index: int = None):
+        # 如果没有传入摄像头索引，使用配置中的默认值
+        self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
         self.cap = None
         
-        # 保存路径（可改成从配置文件读取）
-        self.save_dir = r"C:\Files\Projects\3D_Print_Error_Detection\images\saved_pictures"
+        # 使用配置中的保存路径
+        save_dir = config.get_str('captured_dir_abs', '')
+        if not save_dir:
+            save_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'saved_pictures')
+        self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
         
         # 初始化时就尝试打开（可选：也可以延迟到第一次拍摄）
@@ -23,14 +28,17 @@ class SimpleCamera:
             if not self.cap.isOpened():
                 raise RuntimeError(f"无法打开摄像头 {self.camera_index}")
 
-            # 设置常用分辨率（加速 + 统一输入尺寸给 YOLO）
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            # 使用配置中的分辨率设置
+            width = config.get_int('camera.width', 640)
+            height = config.get_int('camera.height', 480)
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             # self.cap.set(cv2.CAP_PROP_FPS, 30)  # 可选
 
-            # 预热：丢弃前几帧，让自动曝光/白平衡稳定
+            # 使用配置中的预热帧数
+            warmup_frames = config.get_int('camera.warmup_frames', 8)
             print("摄像头预热中（只需第一次）...")
-            for _ in range(8):
+            for _ in range(warmup_frames):
                 self.cap.read()
                 time.sleep(0.05)
 

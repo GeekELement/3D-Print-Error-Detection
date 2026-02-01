@@ -5,19 +5,33 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+from config_loader import config
 
 
 def send_email_alert(
-    to_email: str,
+    to_email: str = "",
     subject: str = "3D打印异常警报",
     body: str = "",
-    attachment_path: str = None,
-    smtp_server: str = "smtp.qq.com",
-    smtp_port: int = 465,
-    from_email: str = None,
-    password: str = None
+    attachment_path: str = "",
+    smtp_server: str = "",
+    smtp_port: int = 587,
+    from_email: str = "",
+    password: str = ""
 ):
-    if not from_email or not password:
+    # 如果没有传入参数，使用配置文件中的默认值
+    if not to_email:
+        to_email = config.get_str('email.to', '')
+    if not smtp_server:
+        smtp_server = config.get_str('email.smtp.server', 'smtp.qq.com')
+    if not smtp_port or smtp_port == 587:  # 默认端口可能被设为0，需要检查
+        smtp_port = config.get_int('email.smtp.port', 465)
+    if not from_email:
+        from_email = config.get_str('email.from', '')
+    if not password:
+        password = config.get_str('email.password', '')
+
+    # 检查必要的配置
+    if config.get_bool('email.enabled') and (not from_email or not password):
         print("错误：邮件账号或授权码未配置")
         return False
 
