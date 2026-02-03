@@ -7,7 +7,7 @@
 # ───────────── 模型配置 ─────────────
 model:
   # YOLO 模型文件路径
-  path: "yolov8n.pt"
+  path: "best.pt"
   # YOLO 常规检测置信度阈值 (0.0-1.0)
   conf_threshold: 0.25
   # 报警置信度阈值 (0.0-1.0)
