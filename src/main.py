@@ -5,6 +5,7 @@ from datetime import datetime
 from ultralytics import YOLO
 from camera_capture import SimpleCamera
 from notify import send_email_alert   # 只使用这一套邮件接口
+from email_replier import EmailReplyHandler
 from config_loader import config      # 导入 YAML 配置
 
 
@@ -29,13 +30,29 @@ def main():
         print(f"模型加载失败：{e}")
         return
 
+    email_reply_handler = EmailReplyHandler()
+    print("邮件回复监听已启动")
+
     interval_min = config.get_float('monitoring.interval_min', 0.1)
     print(f"开始监控，每 {interval_min} 分钟检测一次（Ctrl+C 退出）")
     last_time = time.time()
+    last_email_check = time.time()
 
     try:
         while True:
             now = time.time()
+            
+            email_check_interval = config.get_int('email.imap.check_interval', 10)
+            if now - last_email_check >= email_check_interval:
+                email_reply_handler.check_replies()
+                last_email_check = now
+            
+            skip_remaining = email_reply_handler.get_skip_remaining_time()
+            if skip_remaining > 0:
+                print(f"跳过检测，剩余 {skip_remaining} 秒")
+                time.sleep(5)
+                continue
+            
             if now - last_time >= interval_min * 60:
                 ts_human = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n[{ts_human}] 开始新一轮检测...")

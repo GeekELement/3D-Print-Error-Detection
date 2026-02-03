@@ -9,9 +9,9 @@ model:
   # YOLO 模型文件路径
   path: "best.pt"
   # YOLO 常规检测置信度阈值 (0.0-1.0)
-  conf_threshold: 0.25
+  conf_threshold: 0.01
   # 报警置信度阈值 (0.0-1.0)
-  alert_conf_threshold: 0.70
+  alert_conf_threshold: 0.1
 
 # ───────────── 摄像头配置 ─────────────
 camera:
@@ -54,15 +54,29 @@ email:
     port: 465
     # 是否使用SSL连接
     use_ssl: true
+  # IMAP 服务器设置（用于接收回复邮件）
+  imap:
+    server: "imap.qq.com"
+    # 检查邮件回复的间隔（秒）
+    check_interval: 10
 
-# ───────────── OctoPrint 配置（可选）─────────────
-octoprint:
-  # 是否启用 OctoPrint 控制
-  enabled: false
-  # OctoPrint 服务器地址
-  url: "http://192.168.1.100"
-  # API 密钥（在OctoPrint设置中获取）
-  api_key: "your_api_key_here"
+# ───────────── 邮件回复处理配置 ─────────────
+email_reply:
+  # 是否启用邮件回复处理
+  enabled: true
+  # 邮件主题标识（用于识别告警邮件的回复）
+  subject_prefix: "【3D打印异常警报】"
+  # 回复停止打印（1）后跳过检测的时长（分钟）
+  skip_duration_min: 10
+
+# ───────────── Klipper 配置（直接控制打印机）────────────
+klipper:
+  # 是否启用 Klipper 控制
+  enabled: true
+  # Moonraker 服务器地址
+  url: "http://192.168.9.99:7125"
+  # API 密钥（如需要）
+  api_key: ""
 
 # ───────────── 程序其他设置 ─────────────
 app:
