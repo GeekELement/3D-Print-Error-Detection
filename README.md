@@ -12,12 +12,13 @@
 
 ## 核心功能
 
-- **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认6秒/次，可配置）
+- **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认5秒/次，可配置）
 - **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷
 - **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件
+- **📩 邮件控制**：支持通过邮件回复远程控制打印机（停止/继续打印）
+- **🔧 Klipper集成**：通过Moonraker API直接控制Klipper打印机
 - **💾 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
 - **⚙️ YAML配置**：使用YAML文件统一管理所有配置参数
-- **🔗 OctoPrint集成**：支持与OctoPrint系统集成进行打印机控制（可选）
 
 ## 技术栈
 
@@ -26,8 +27,8 @@
 - **计算机视觉库**: OpenCV
 - **配置管理**: PyYAML
 - **HTTP客户端**: requests
-- **邮件协议**: SMTP
-- **3D打印集成**: OctoPrint API
+- **邮件协议**: SMTP, IMAP
+- **打印机控制**: Klipper/Moonraker API
 
 ## 快速开始
 
@@ -56,29 +57,29 @@
    ```yaml
    # 模型配置
    model:
-     path: "yolov8n.pt"                    # YOLOv8模型文件路径
-     conf_threshold: 0.25                   # 检测置信度阈值
-     alert_conf_threshold: 0.70             # 告警阈值
+     path: "best.pt"                      # YOLOv8模型文件路径
+     conf_threshold: 0.01                  # 检测置信度阈值
+     alert_conf_threshold: 0.10            # 告警阈值
 
    # 摄像头配置
    camera:
-     index: 0                               # 摄像头索引
-     width: 640                             # 图像宽度
-     height: 480                            # 图像高度
+     index: 0                              # 摄像头索引
+     width: 640                           # 图像宽度
+     height: 480                          # 图像高度
 
    # 监控配置
    monitoring:
-     interval_min: 0.1                      # 检测间隔（分钟）
+     interval_sec: 5                      # 检测间隔（秒）
 
    # 邮件配置
    email:
-     enabled: true                          # 是否启用邮件告警
-     to: "your_email@example.com"           # 接收邮箱
-     from: "sender@example.com"             # 发送邮箱
-     password: "your_app_password"          # SMTP授权码
+     enabled: true                        # 是否启用邮件告警
+     to: "your_email@example.com"         # 接收邮箱
+     from: "sender@example.com"          # 发送邮箱
+     password: "your_app_password"       # SMTP授权码
      smtp:
-       server: "smtp.qq.com"                # SMTP服务器
-       port: 465                            # SMTP端口
+       server: "smtp.qq.com"              # SMTP服务器
+       port: 465                          # SMTP端口
    ```
 
 4. **运行程序**
@@ -92,7 +93,7 @@
 3D_Print_Error_Detection/
 ├── README.md                     # 项目说明文档
 ├── requirements.txt              # Python依赖包列表
-├── yolov8n.pt                    # YOLOv8模型权重文件
+├── best.pt                       # 训练好的YOLOv8模型权重
 ├── images/                       # 图片存储目录
 │   ├── saved_pictures/           # 原始拍摄图片
 │   └── predicted_pictures/       # 带标注的预测图片
@@ -102,7 +103,8 @@
     ├── config_loader.py          # YAML配置加载器
     ├── camera_capture.py         # 摄像头操作模块
     ├── notify.py                 # 邮件告警模块
-    └── octoprint_client.py       # OctoPrint API客户端（可选）
+    ├── email_replier.py          # 邮件回复处理模块
+    └── klipper_client.py         # Klipper/Moonraker API客户端
 ```
 
 ## 核心模块
@@ -127,22 +129,30 @@
 - 支持附件（检测图片）
 - 异常处理和错误日志
 
-### 5. OctoPrint集成 (`octoprint_client.py`)
-- 打印机状态监控
-- 远程控制功能（暂停/恢复/停止打印）
-- API接口封装
+### 5. 邮件回复处理 (`email_replier.py`)
+- 监听IMAP邮箱收件箱
+- 识别告警邮件的回复
+- 回复"0"：停止打印
+- 回复"1"：继续打印并跳过检测
+
+### 6. Klipper控制 (`klipper_client.py`)
+- 通过Moonraker API控制打印机
+- 支持暂停/恢复/停止打印
+- 获取打印任务和打印机状态
 
 ## 工作流程
 
 1. **配置加载**：启动时读取YAML配置文件并验证
-2. **初始化**：加载YOLOv8模型，初始化摄像头
+2. **初始化**：加载YOLOv8模型，初始化摄像头，启动邮件回复监听
 3. **循环监控**：按设定间隔执行以下步骤：
+   - 检查邮件回复（根据配置）
    - 拍摄当前打印画面
    - YOLO模型推理分析
    - 保存原始图片和标注结果
    - 判断是否需要发送告警邮件
 4. **告警处理**：达到告警阈值时自动发送邮件
-5. **持续监控**：循环执行直至程序终止
+5. **远程控制**：用户可通过邮件回复控制打印机（0=停止，1=继续）
+6. **持续监控**：循环执行直至程序终止
 
 ## 配置说明
 
@@ -166,7 +176,7 @@ model:
 ### 监控配置
 ```yaml
 monitoring:
-  interval_min: 0.1   # 检测间隔（分钟）
+  interval_sec: 5   # 检测间隔（秒）
 ```
 
 ### 邮件配置
@@ -180,13 +190,24 @@ email:
     server: "smtp.qq.com"
     port: 465
     use_ssl: true
+  imap:
+    server: "imap.qq.com"
+    check_interval: 10    # 检查邮件回复间隔（秒）
 ```
 
-### OctoPrint配置（可选）
+### 邮件回复配置
 ```yaml
-octoprint:
-  enabled: false
-  url: "http://192.168.1.100"
+email_reply:
+  enabled: true
+  subject_prefix: "【3D打印异常警报】"
+  skip_duration_min: 10   # 回复1后跳过检测的时长（分钟）
+```
+
+### Klipper配置
+```yaml
+klipper:
+  enabled: true
+  url: "http://192.168.1.100:7125"
   api_key: "你的API密钥"
 ```
 
@@ -195,9 +216,18 @@ octoprint:
 - 使用前请准备训练好的YOLOv8模型（`best.pt`或`yolov8n.pt`）
 - 确保摄像头权限已配置
 - 邮件发送需要SMTP授权码（非登录密码）
+- 邮件回复需要开启IMAP服务
 - YAML配置文件使用空格缩进，不支持Tab
-- OctoPrint控制功能需要先在OctoPrint中获取API密钥
+- Klipper控制需要先配置Moonraker
 - 程序支持Ctrl+C优雅退出
+
+## 邮件回复控制
+
+用户收到告警邮件后，可回复以下指令控制打印机：
+- **回复 0**：立即停止打印
+- **回复 1**：继续打印，10分钟内不检测（可配置）
+
+回复邮件主题需包含"Re:"或"回复"。
 
 ## 扩展功能
 
