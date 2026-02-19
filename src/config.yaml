@@ -26,8 +26,8 @@ camera:
 
 # ───────────── 监控配置 ─────────────
 monitoring:
-  # 检测间隔（分钟）
-  interval_min: 0.1
+  # 检测间隔（秒）
+  interval_sec: 5
 
 # ───────────── 目录配置 ─────────────
 directories:

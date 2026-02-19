@@ -33,8 +33,8 @@ def main():
     email_reply_handler = EmailReplyHandler()
     print("邮件回复监听已启动")
 
-    interval_min = config.get_float('monitoring.interval_min', 0.1)
-    print(f"开始监控，每 {interval_min} 分钟检测一次（Ctrl+C 退出）")
+    interval_sec = config.get_float('monitoring.interval_sec', 1)
+    print(f"开始监控，每 {interval_sec} 秒检测一次（Ctrl+C 退出）")
     last_time = time.time()
     last_email_check = time.time()
 
@@ -53,7 +53,7 @@ def main():
                 time.sleep(5)
                 continue
             
-            if now - last_time >= interval_min * 60:
+            if now - last_time >= interval_sec:
                 ts_human = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n[{ts_human}] 开始新一轮检测...")
 
