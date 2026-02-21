@@ -1,0 +1,86 @@
+# config.yaml - 3D打印异常检测系统配置文件
+# 配置文件使用说明：
+# 1. 修改配置后需要重启程序
+# 2. # 开头的为注释行
+# 3. 缩进必须使用空格，不能使用Tab
+
+# ───────────── 模型配置 ─────────────
+model:
+  # YOLO 模型文件路径
+  path: "best.pt"
+  # YOLO 常规检测置信度阈值 (0.0-1.0)
+  conf_threshold: 0.01
+  # 报警置信度阈值 (0.0-1.0)
+  alert_conf_threshold: 0.1
+
+# ───────────── 摄像头配置 ─────────────
+camera:
+  # 摄像头索引 (0为默认摄像头)
+  index: 0
+  # 摄像头分辨率 - 宽度
+  width: 640
+  # 摄像头分辨率 - 高度
+  height: 480
+  # 摄像头预热帧数 (用于自动曝光/白平衡稳定)
+  warmup_frames: 8
+
+# ───────────── 监控配置 ─────────────
+monitoring:
+  # 检测间隔（秒）
+  interval_sec: 5
+
+# ───────────── 目录配置 ─────────────
+directories:
+  # 项目根目录（相对于此配置文件的目录）
+  project_root: ".."
+  # 预测图片保存目录（相对于项目根目录）
+  predicted_dir: "images/predicted_pictures"
+  # 原始图片保存目录（相对于项目根目录）
+  captured_dir: "images/saved_pictures"
+
+# ───────────── 邮件报警配置 ─────────────
+email:
+  # 是否启用邮件报警
+  enabled: true
+  # 接收邮件地址
+  to: "geekelement@outlook.com"
+  # 发送邮件地址
+  from: "geekelement@foxmail.com"
+  # 授权码/应用密码（非邮箱登录密码）
+  password: "uxdrpmvghbffdbbj"
+  # SMTP 服务器设置
+  smtp:
+    server: "smtp.qq.com"
+    port: 465
+    # 是否使用SSL连接
+    use_ssl: true
+  # IMAP 服务器设置（用于接收回复邮件）
+  imap:
+    server: "imap.qq.com"
+    # 检查邮件回复的间隔（秒）
+    check_interval: 10
+
+# ───────────── 邮件回复处理配置 ─────────────
+email_reply:
+  # 是否启用邮件回复处理
+  enabled: true
+  # 邮件主题标识（用于识别告警邮件的回复）
+  subject_prefix: "【3D打印异常警报】"
+  # 回复停止打印（1）后跳过检测的时长（分钟）
+  skip_duration_min: 10
+
+# ───────────── Klipper 配置（直接控制打印机）────────────
+klipper:
+  # 是否启用 Klipper 控制
+  enabled: true
+  # Moonraker 服务器地址
+  url: "http://192.168.9.99:7125"
+  # API 密钥（如需要）
+  api_key: ""
+
+# ───────────── 程序其他设置 ─────────────
+app:
+  # 程序显示名称
+  name: "3D打印异常检测系统"
+  # 日志级别 (DEBUG, INFO, WARNING, ERROR)
+  log_level: "INFO"
