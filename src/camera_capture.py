@@ -61,8 +61,26 @@ class SimpleCamera:
         if not cv2.imwrite(save_path, frame):
             raise RuntimeError(f"保存图片失败：{save_path}")
 
+        max_pictures = config.get_int('camera.max_pictures', 100)
+        if max_pictures != 0:
+            self._cleanup_old_images(max_pictures)
+
         print(f"已拍摄并保存：{save_path}")
         return save_path
+
+    def _cleanup_old_images(self, max_count: int):
+        """删除超出数量的最旧图片"""
+        files = [f for f in os.listdir(self.save_dir) if f.endswith(('.jpg', '.png', '.jpeg'))]
+        if len(files) <= max_count:
+            return
+        
+        files.sort(key=lambda f: os.path.getmtime(os.path.join(self.save_dir, f)))
+        for old_file in files[:-max_count]:
+            try:
+                os.remove(os.path.join(self.save_dir, old_file))
+                print(f"已删除旧图片：{old_file}")
+            except Exception as e:
+                print(f"删除旧图片失败：{old_file}, {e}")
 
     def release(self):
         """程序结束或长时间不用时调用"""
