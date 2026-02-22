@@ -8,19 +8,7 @@ from camera_capture import SimpleCamera
 from notify import send_email_alert   # 只使用这一套邮件接口
 from email_replier import EmailReplyHandler
 from config_loader import config      # 导入 YAML 配置
-
-
-def _cleanup_old_images(directory: str, max_count: int):
-    """删除超出数量的最旧图片"""
-    files = [f for f in os.listdir(directory) if f.endswith(('.jpg', '.png', '.jpeg'))]
-    if len(files) <= max_count:
-        return
-    files.sort(key=lambda f: os.path.getmtime(os.path.join(directory, f)))
-    for old_file in files[:-max_count]:
-        try:
-            os.remove(os.path.join(directory, old_file))
-        except Exception as e:
-            print(f"删除旧图片失败：{old_file}, {e}")
+from image_utils import cleanup_old_images
 
 
 # ───────────── 主程序 ─────────────
@@ -134,7 +122,7 @@ def main():
                     print(f"预测图已保存：{predicted_path}")
                     max_pictures = config.get_int('camera.max_pictures', 100)
                     if max_pictures != 0:
-                        _cleanup_old_images(predicted_dir, max_pictures)
+                        cleanup_old_images(predicted_dir, max_pictures)
                 else:
                     print("预测图保存失败，跳过本轮")
                     last_time = now

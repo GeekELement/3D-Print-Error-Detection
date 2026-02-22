@@ -26,7 +26,7 @@ camera:
   # 摄像头预热帧数 (用于自动曝光/白平衡稳定)
   warmup_frames: 8
   # 图片保留最大数量，0=保存全部，正整数=保留最新n张
-  max_pictures: 0
+  max_pictures: 3
 
 # ───────────── 监控配置 ─────────────
 monitoring:

@@ -7,7 +7,8 @@ class Config:
     """YAML 配置文件加载器"""
     
     def __init__(self):
-        config_path = os.path.join(os.path.dirname(__file__), "config.yaml")
+        base_dir = Path(__file__).parent.parent
+        config_path = base_dir / "config.yaml"
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 self.config = yaml.safe_load(f) or {}
