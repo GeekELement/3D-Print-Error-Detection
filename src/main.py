@@ -69,20 +69,31 @@ def main():
                 alert_details = []
 
                 alert_conf_threshold = config.get_float('model.alert_conf_threshold', 0.70)
+                spaghetti_area_threshold = config.get_float('model.spaghetti_area_threshold', 5000)
+
+                other_faults = []
 
                 for box in results.boxes:
                     cls_name = results.names[int(box.cls)]
                     conf = float(box.conf)
+                    xyxy = box.xyxy[0].cpu().numpy()
+                    area = (xyxy[2] - xyxy[0]) * (xyxy[3] - xyxy[1])
 
-                    detected_info.append(f"{cls_name} ({conf:.2f})")
-
-                    if conf >= alert_conf_threshold:
-                        should_alert = True
-                        alert_details.append(f"{cls_name} ({conf:.2f})")
+                    if cls_name == "spaghetti":
+                        detected_info.append(f"{cls_name} ({conf:.2f}, 面积:{area:.0f})")
+                        if conf >= alert_conf_threshold and area >= spaghetti_area_threshold:
+                            should_alert = True
+                            alert_details.append(f"炒面 (置信度:{conf:.2f}, 面积:{area:.0f}px²)")
+                        else:
+                            print(f"  -> 炒面未达到告警条件(置信度:{conf:.2f}/{alert_conf_threshold}, 面积:{area:.0f}/{spaghetti_area_threshold})")
+                    else:
+                        other_faults.append(f"{cls_name}: {conf:.2f}")
 
                 if detected_info:
                     print("检测到：", ", ".join(detected_info))
-                else:
+                if other_faults:
+                    print("其他故障：", ", ".join(other_faults))
+                if not detected_info and not other_faults:
                     print("本次未检测到任何目标")
 
                 # 3️⃣ 保存预测图
@@ -100,10 +111,12 @@ def main():
 
                 # 4️⃣ 发送报警邮件
                 if should_alert and config.get_bool('email.enabled'):
+                    other_faults_info = f"其他故障：{', '.join(other_faults)}" if other_faults else "无"
                     body = (
                         "【3D打印异常警报】\n\n"
                         f"检测时间：{ts_human}\n"
-                        f"异常目标：{', '.join(alert_details)}\n\n"
+                        f"炒面告警：{', '.join(alert_details)}\n"
+                        f"{other_faults_info}\n\n"
                         "请尽快检查打印机状态。\n"
                         "预测图片已作为附件发送。"
                     )

@@ -12,6 +12,8 @@ model:
   conf_threshold: 0.01
   # 报警置信度阈值 (0.0-1.0)
   alert_conf_threshold: 0.1
+  # 炒面(spaghetti)告警面积阈值(像素²)，面积小于此值时不告警
+  spaghetti_area_threshold: 5000
 
 # ───────────── 摄像头配置 ─────────────
 camera:
