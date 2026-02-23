@@ -5,10 +5,11 @@ import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from camera_capture import SimpleCamera
-from notify import send_email_alert   # 只使用这一套邮件接口
+from notify import send_email_alert
 from email_replier import EmailReplyHandler
-from config_loader import config      # 导入 YAML 配置
+from config_loader import config
 from image_utils import cleanup_old_images
+from cuda_utils import CudaUtils
 
 
 # ───────────── 主程序 ─────────────
@@ -21,12 +22,17 @@ def main():
             print(f"  - {error}")
         return
 
+    cuda_utils = CudaUtils(config)
+    cuda_utils.print_info()
+
     print("初始化摄像头...")
     camera = SimpleCamera(camera_index=config.get_int('camera.index', 0))
 
     print("加载 YOLOv8 模型...")
     try:
         model = YOLO(config.get_str('model_path_abs', ''))
+        if cuda_utils.should_use_cuda:
+            model.to('cuda')
         print("模型加载完成")
     except Exception as e:
         print(f"模型加载失败：{e}")

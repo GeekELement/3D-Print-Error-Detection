@@ -34,9 +34,10 @@
 
 ### 环境要求
 
-- 硬件：带摄像头的上位机
+- 硬件：带摄像头的上位机（测试demo可用视频文件）
 - 操作系统: Ubuntu / Debian / Windows
 - Python: 3.7 或更高版本
+- GPU: 可选（支持CUDA加速）
 
 ### 安装与部署
 
@@ -50,42 +51,28 @@
    ```bash
    pip install -r requirements.txt
    ```
-   核心依赖：`opencv-python>=4.6.0`, `torch>=1.7.0`, `ultralytics>=8.0.0`, `requests>=2.23.0`, `PyYAML>=6.0`
+   核心依赖：`opencv-python>=4.6.0`, `torch>=1.7.0`, `ultralytics>=8.0.0`, `requests>=2.23.0`, `PyYAML>=6.0`, `numpy>=1.21.0`
 
 3. **配置参数**
-   编辑 `src/config.yaml` 配置文件：
-   ```yaml
-   # 模型配置
-   model:
-     path: "best.pt"                      # YOLOv8模型文件路径
-     conf_threshold: 0.01                  # 检测置信度阈值
-     alert_conf_threshold: 0.10            # 告警阈值
-
-   # 摄像头配置
-   camera:
-     index: 0                              # 摄像头索引
-     width: 640                           # 图像宽度
-     height: 480                          # 图像高度
-
-   # 监控配置
-   monitoring:
-     interval_sec: 5                      # 检测间隔（秒）
-
-   # 邮件配置
-   email:
-     enabled: true                        # 是否启用邮件告警
-     to: "your_email@example.com"         # 接收邮箱
-     from: "sender@example.com"          # 发送邮箱
-     password: "your_app_password"       # SMTP授权码
-     smtp:
-       server: "smtp.qq.com"              # SMTP服务器
-       port: 465                          # SMTP端口
-   ```
+   编辑 `config.yaml` 配置文件
 
 4. **运行程序**
-   ```bash
-   python src/main.py
-   ```
+   - 实时监控模式：
+     ```bash
+     python src/main.py
+     ```
+   - 视频测试模式：
+     ```bash
+     python test-demo/test.py
+     ```
+
+### 测试demo
+
+`test-demo/test.py` 可独立运行，不依赖src模块：
+- 支持视频文件检测
+- 自动输出带标注的结果视频
+- 实时显示FPS
+- 自动检测CUDA可用性
 
 ## 项目结构
 
@@ -98,9 +85,14 @@
 ├── images/                       # 图片存储目录
 │   ├── saved_pictures/           # 原始拍摄图片
 │   └── predicted_pictures/       # 带标注的预测图片
+├── test-demo/                    # 测试demo
+│   ├── test.py                   # 视频检测脚本
+│   ├── test1.mp4                 # 测试视频
+│   └── output/                   # 输出目录
 └── src/                          # 源代码目录
     ├── main.py                   # 主程序入口
     ├── config_loader.py          # YAML配置加载器
+    ├── cuda_utils.py             # CUDA工具类
     ├── camera_capture.py         # 摄像头操作模块
     ├── image_utils.py            # 图片工具模块（清理旧图片）
     ├── notify.py                 # 邮件告警模块
@@ -115,7 +107,12 @@
 - 支持路径自动计算和环境变量
 - 配置验证和错误提示
 
-### 2. 摄像头模块 (`camera_capture.py`)
+### 2. CUDA工具类 (`cuda_utils.py`)
+- 自动检测GPU可用性
+- 根据配置决定是否使用CUDA加速
+- 提供设备信息查询
+
+### 3. 摄像头模块 (`camera_capture.py`)
 - 基于OpenCV的摄像头操作
 - 支持预热和分辨率配置
 - 自动保存带时间戳的图片
@@ -177,6 +174,7 @@ model:
   path: "yolov8n.pt"           # 模型文件路径
   conf_threshold: 0.25          # 检测置信度阈值
   alert_conf_threshold: 0.70    # 告警置信度阈值
+  use_cuda: true                # 是否启用CUDA加速
 ```
 
 ### 监控配置
@@ -226,6 +224,7 @@ klipper:
 - YAML配置文件使用空格缩进，不支持Tab
 - Klipper控制需要先配置Moonraker
 - 程序支持Ctrl+C优雅退出
+- 如需CUDA加速，需安装PyTorch CUDA版本，并在config.yaml中设置 `model.use_cuda: true`
 
 ## 邮件回复控制
 
