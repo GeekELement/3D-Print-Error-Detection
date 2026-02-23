@@ -171,7 +171,7 @@ camera:
 ### 模型配置
 ```yaml
 model:
-  path: "yolov8n.pt"           # 模型文件路径
+  path: "best.pt"           # 模型文件路径
   conf_threshold: 0.25          # 检测置信度阈值
   alert_conf_threshold: 0.70    # 告警置信度阈值
   use_cuda: true                # 是否启用CUDA加速
