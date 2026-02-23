@@ -93,15 +93,16 @@
 3D_Print_Error_Detection/
 ├── README.md                     # 项目说明文档
 ├── requirements.txt              # Python依赖包列表
+├── config.yaml                   # 配置文件
 ├── best.pt                       # 训练好的YOLOv8模型权重
 ├── images/                       # 图片存储目录
 │   ├── saved_pictures/           # 原始拍摄图片
 │   └── predicted_pictures/       # 带标注的预测图片
 └── src/                          # 源代码目录
     ├── main.py                   # 主程序入口
-    ├── config.yaml               # YAML配置文件
     ├── config_loader.py          # YAML配置加载器
     ├── camera_capture.py         # 摄像头操作模块
+    ├── image_utils.py            # 图片工具模块（清理旧图片）
     ├── notify.py                 # 邮件告警模块
     ├── email_replier.py          # 邮件回复处理模块
     └── klipper_client.py         # Klipper/Moonraker API客户端
@@ -118,6 +119,11 @@
 - 基于OpenCV的摄像头操作
 - 支持预热和分辨率配置
 - 自动保存带时间戳的图片
+- 自动清理超出数量限制的旧图片
+
+### 3. 图片工具模块 (`image_utils.py`)
+- 清理超出数量限制的旧图片
+- 使用堆算法高效保留最新N张图片
 
 ### 3. 检测模块 (`main.py`)
 - YOLOv8模型加载和推理
