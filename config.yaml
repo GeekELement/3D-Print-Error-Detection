@@ -11,9 +11,9 @@ model:
   # YOLO 常规检测置信度阈值 (0.0-1.0)
   conf_threshold: 0.01
   # 报警置信度阈值 (0.0-1.0)
-  alert_conf_threshold: 0.1
+  alert_conf_threshold: 0.5
   # 炒面(spaghetti)告警面积阈值(像素²)，面积小于此值时不告警
-  spaghetti_area_threshold: 5000
+  spaghetti_area_threshold: 2000
   # 是否启用CUDA加速 (需要GPU和PyTorch CUDA版本)
   use_cuda: true
 
