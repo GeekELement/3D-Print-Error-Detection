@@ -29,6 +29,8 @@ camera:
   warmup_frames: 8
   # 图片保留最大数量，0=保存全部，正整数=保留最新n张
   max_pictures: 3
+  # 图片清理间隔（每N次检测清理一次），建议设为1
+  cleanup_interval: 1
 
 # ───────────── 监控配置 ─────────────
 monitoring:
@@ -40,9 +42,9 @@ directories:
   # 项目根目录（相对于此配置文件的目录）
   project_root: ".."
   # 预测图片保存目录（相对于项目根目录）
-  predicted_dir: "images/predicted_pictures"
+  predicted_dir: "images/predicted"
   # 原始图片保存目录（相对于项目根目录）
-  captured_dir: "images/saved_pictures"
+  captured_dir: "images/captured"
 
 # ───────────── 邮件报警配置 ─────────────
 email:

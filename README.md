@@ -83,65 +83,48 @@
 ├── config.yaml                   # 配置文件
 ├── best.pt                       # 训练好的YOLOv8模型权重
 ├── images/                       # 图片存储目录
-│   ├── saved_pictures/           # 原始拍摄图片
-│   └── predicted_pictures/       # 带标注的预测图片
+│   ├── captured/                 # 原始拍摄图片
+│   └── predicted/                # 带标注的预测图片
 ├── test-demo/                    # 测试demo
 │   ├── test.py                   # 视频检测脚本
 │   ├── test1.mp4                 # 测试视频
 │   └── output/                   # 输出目录
 └── src/                          # 源代码目录
     ├── main.py                   # 主程序入口
-    ├── config_loader.py          # YAML配置加载器
-    ├── cuda_utils.py             # CUDA工具类
-    ├── camera_capture.py         # 摄像头操作模块
-    ├── image_utils.py            # 图片工具模块（清理旧图片）
-    ├── notify.py                 # 邮件告警模块
-    ├── email_replier.py          # 邮件回复处理模块
-    └── klipper_client.py         # Klipper/Moonraker API客户端
+    ├── config.py                 # YAML配置加载
+    ├── camera.py                 # 摄像头操作 + 图片清理
+    ├── alerter.py                # 邮件告警 + 邮件回复 + Klipper控制
+    └── device.py                 # 设备管理（GPU/CPU）
 ```
 
 ## 核心模块
 
-### 1. 配置管理 (`config_loader.py`)
+### 1. 配置管理 (`config.py`)
 - 使用YAML格式配置文件
-- 支持路径自动计算和环境变量
-- 配置验证和错误提示
+- 支持路径自动计算
+- 配置验证和目录创建
 
-### 2. CUDA工具类 (`cuda_utils.py`)
+### 2. 设备管理 (`device.py`)
 - 自动检测GPU可用性
 - 根据配置决定是否使用CUDA加速
 - 提供设备信息查询
 
-### 3. 摄像头模块 (`camera_capture.py`)
+### 3. 摄像头模块 (`camera.py`)
 - 基于OpenCV的摄像头操作
 - 支持预热和分辨率配置
 - 自动保存带时间戳的图片
-- 自动清理超出数量限制的旧图片
+- 定时清理超出数量限制的旧图片
 
-### 3. 图片工具模块 (`image_utils.py`)
-- 清理超出数量限制的旧图片
-- 使用堆算法高效保留最新N张图片
+### 4. 报警模块 (`alerter.py`)
+- `send_email`: SMTP邮件发送，支持附件
+- `EmailReplyHandler`: 监听IMAP邮箱，识别告警邮件回复
+- `KlipperClient`: 通过Moonraker API控制打印机
 
-### 3. 检测模块 (`main.py`)
+### 5. 主程序 (`main.py`)
 - YOLOv8模型加载和推理
 - 实时检测和结果分析
 - 阈值判断和告警决策
-
-### 4. 邮件告警 (`notify.py`)
-- SMTP邮件发送功能
-- 支持附件（检测图片）
-- 异常处理和错误日志
-
-### 5. 邮件回复处理 (`email_replier.py`)
-- 监听IMAP邮箱收件箱
-- 识别告警邮件的回复
-- 回复"0"：停止打印
-- 回复"1"：继续打印并跳过检测
-
-### 6. Klipper控制 (`klipper_client.py`)
-- 通过Moonraker API控制打印机
-- 支持暂停/恢复/停止打印
-- 获取打印任务和打印机状态
+- 炒面(spaghetti)面积并集计算
 
 ## 工作流程
 
@@ -166,6 +149,8 @@ camera:
   width: 640            # 图像宽度
   height: 480           # 图像高度
   warmup_frames: 8      # 预热帧数
+  max_pictures: 3       # 保存图片最大数量
+  cleanup_interval: 1   # 图片清理间隔（每N次检测清理一次）
 ```
 
 ### 模型配置
