@@ -1,0 +1,84 @@
+# config.yaml - 3D打印异常检测系统配置文件
+# ============================================================
+# 注意：此文件为模板，不包含隐私信息
+# 复制此文件为 config.yaml 并填入你的配置
+# ============================================================
+
+# ───────────── 调试模式 ─────────────
+debug:
+  video_path: ""                     # 视频文件路径，为空使用摄像头
+  frame_interval: 1                  # 视频模式每多少帧取一张（1=每帧都取）
+
+# ───────────── 模型配置 ─────────────
+model:
+  path: "best.pt"                    # YOLO 模型文件路径
+  conf_threshold: 0.3                # 常规检测置信度阈值 (0.0-1.0)
+  alert_conf_threshold: 0.65         # 报警置信度阈值 (0.0-1.0)
+  spaghetti_area_threshold: 2000     # 炒面告警面积阈值(像素²)，小于此值不告警
+  use_cuda: true                     # 是否启用CUDA加速
+
+# ───────────── 摄像头配置 ─────────────
+camera:
+  index: 0                           # 摄像头索引 (0为默认摄像头)
+  width: 640                         # 分辨率宽度
+  height: 480                       # 分辨率高度
+  warmup_frames: 8                  # 预热帧数 (自动曝光/白平衡稳定)
+  max_captured: 3                   # captured目录保留最新图片数量，0=保留全部
+  max_predicted: 3                  # predicted目录保留最新图片数量，0=保留全部
+
+# ───────────── 监控配置 ─────────────
+monitoring:
+  interval_sec: 5                    # 检测间隔（秒）
+
+# ───────────── 目录配置 ─────────────
+directories:
+  project_root: ".."                 # 项目根目录
+  predicted_dir: "images/predicted"  # 预测图片保存目录
+  captured_dir: "images/captured"    # 原始图片保存目录
+
+# ───────────── 邮件报警配置 ─────────────
+email:
+  enabled: true                      # 是否启用邮件报警
+  to: "your_email@example.com"      # 接收邮件地址
+  from: "your_email@example.com"    # 发送邮件地址
+  password: "your_smtp_password"     # 授权码/应用密码
+  smtp:
+    server: "smtp.qq.com"            # SMTP服务器
+    port: 465                        # SMTP端口
+    use_ssl: true                    # 是否使用SSL
+  imap:
+    server: "imap.qq.com"            # IMAP服务器（用于接收回复）
+    check_interval: 10               # 检查间隔（秒）
+
+# ───────────── 邮件回复控制 ─────────────
+email_reply:
+  enabled: true                      # 是否启用邮件回复处理
+  subject_prefix: "【3D打印异常警报】"  # 告警邮件主题标识
+  skip_duration_min: 10              # 回复后跳过检测时长（分钟）
+
+# ───────────── 打印机远程控制 ─────────────
+printer:
+  # 打印机固件类型: klipper, octoprint, bambu, none
+  type: "klipper"
+
+  # Klipper 配置 (type: klipper)
+  klipper:
+    url: "http://192.168.1.100:7125" # Moonraker服务器地址
+    api_key: ""                       # API密钥（可选）
+
+  # OctoPrint 配置 (type: octoprint)
+  octoprint:
+    url: "http://192.168.1.100:5000" # OctoPrint服务器地址
+    api_key: ""                       # API密钥
+
+  # Bambu Lab 配置 (type: bambu)
+  bambu:
+    host: "192.168.1.100"             # 打印机IP地址
+    mqtt_port: 8883                   # MQTT端口 (8883=SSL, 1883=非SSL)
+    access_code: ""                   # 访问代码
+    serial_number: ""                 # 打印机序列号
+
+# ───────────── 程序设置 ─────────────
+app:
+  name: "3D打印异常检测系统"
+  log_level: "INFO"                   # 日志级别: DEBUG, INFO, WARNING, ERROR
