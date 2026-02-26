@@ -35,6 +35,18 @@ class Camera:
         self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
         self.cap = None  # VideoCapture对象
         
+        # 检查是否使用测试视频
+        test_video_path = config.get_str('camera.test_video_path', '')
+        if test_video_path:
+            # 相对路径转换为绝对路径
+            from pathlib import Path
+            base_dir = Path(__file__).parent.parent
+            self.video_path = str(base_dir / test_video_path)
+            self.is_video_mode = True
+        else:
+            self.video_path = None
+            self.is_video_mode = False
+        
         # 图片保存目录
         save_dir = config.get_str('captured_dir_abs', '')
         if not save_dir:
@@ -43,34 +55,41 @@ class Camera:
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
         
-        # 打开摄像头
+        # 打开视频或摄像头
         self._open_camera()
 
     def _open_camera(self):
         """
-        内部方法：打开摄像头并预热
+        内部方法：打开视频或摄像头并预热
         
-        使用DSHOW后端（Windows）提高兼容性
-        预热拍摄若干帧以稳定自动曝光和白平衡
+        如果配置了test_video_path，则打开视频文件
+        否则使用DSHOW后端打开摄像头
         """
         if self.cap is None or not self.cap.isOpened():
-            # 使用DSHOW后端，Windows平台推荐
-            self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
-            if not self.cap.isOpened():
-                raise RuntimeError(f"无法打开摄像头 {self.camera_index}")
+            if self.is_video_mode:
+                # 打开视频文件
+                self.cap = cv2.VideoCapture(self.video_path)
+                if not self.cap.isOpened():
+                    raise RuntimeError(f"无法打开视频 {self.video_path}")
+                print(f"已打开视频: {self.video_path}")
+            else:
+                # 使用DSHOW后端，Windows平台推荐
+                self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+                if not self.cap.isOpened():
+                    raise RuntimeError(f"无法打开摄像头 {self.camera_index}")
 
-            # 设置分辨率
-            width = config.get_int('camera.width', 640)
-            height = config.get_int('camera.height', 480)
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                # 设置分辨率
+                width = config.get_int('camera.width', 640)
+                height = config.get_int('camera.height', 480)
+                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
-            # 预热摄像头（让自动曝光、白平衡稳定下来）
-            warmup_frames = config.get_int('camera.warmup_frames', 8)
-            print("摄像头预热中...")
-            for _ in range(warmup_frames):
-                self.cap.read()
-                time.sleep(0.05)
+                # 预热摄像头（让自动曝光、白平衡稳定下来）
+                warmup_frames = config.get_int('camera.warmup_frames', 8)
+                print("摄像头预热中...")
+                for _ in range(warmup_frames):
+                    self.cap.read()
+                    time.sleep(0.05)
 
     def capture_and_save(self, prefix: str = "print", cleanup: bool = False) -> str:
         """
@@ -86,13 +105,21 @@ class Camera:
         Raises:
             RuntimeError: 读取画面失败或保存失败时抛出
         """
-        # 确保摄像头已打开
+        # 确保视频/摄像头已打开
         self._open_camera()
         
         # 读取一帧
         ret, frame = self.cap.read()
         if not ret:
-            raise RuntimeError("无法读取摄像头画面")
+            # 视频模式：重新打开视频循环播放
+            if self.is_video_mode:
+                self.cap.release()
+                self.cap = cv2.VideoCapture(self.video_path)
+                ret, frame = self.cap.read()
+                if not ret:
+                    raise RuntimeError("无法读取视频画面")
+            else:
+                raise RuntimeError("无法读取摄像头画面")
 
         # 生成文件名：前缀_时间戳.jpg
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

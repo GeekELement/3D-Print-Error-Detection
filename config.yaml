@@ -9,9 +9,9 @@ model:
   # YOLO 模型文件路径
   path: "best.pt"
   # YOLO 常规检测置信度阈值 (0.0-1.0)
-  conf_threshold: 0.01
+  conf_threshold: 0.1
   # 报警置信度阈值 (0.0-1.0)
-  alert_conf_threshold: 0.5
+  alert_conf_threshold: 0.65
   # 炒面(spaghetti)告警面积阈值(像素²)，面积小于此值时不告警
   spaghetti_area_threshold: 2000
   # 是否启用CUDA加速 (需要GPU和PyTorch CUDA版本)
@@ -19,6 +19,8 @@ model:
 
 # ───────────── 摄像头配置 ─────────────
 camera:
+  # 测试视频路径（设为视频文件路径则使用视频，为空则使用摄像头）
+  test_video_path: "test-demo/test1.mp4"
   # 摄像头索引 (0为默认摄像头)
   index: 0
   # 摄像头分辨率 - 宽度
