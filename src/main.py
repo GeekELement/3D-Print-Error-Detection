@@ -66,16 +66,16 @@ def main():
 
     # ───────────── 监控循环阶段 ─────────────
     
-    # 读取配置参数
+# 读取配置参数
     interval_sec = config.get_float('monitoring.interval_sec', 1)  # 检测间隔
-    cleanup_interval = config.get_int('camera.cleanup_interval', 1)  # 清理图片间隔
+    max_captured = config.get_int('camera.max_captured', 3)
+    max_predicted = config.get_int('camera.max_predicted', 3)
     
     print(f"开始监控，每 {interval_sec} 秒检测一次（Ctrl+C 退出）")
     
     # 状态变量
     last_time = time.time()           # 上次检测时间
     last_email_check = time.time()    # 上次检查邮件时间
-    detection_count = 0               # 检测计数器（用于触发清理）
 
     try:
         while True:
@@ -96,13 +96,16 @@ def main():
             
             # 3. 达到检测间隔，开始新一轮检测
             if now - last_time >= interval_sec:
-                detection_count += 1
-                should_cleanup = detection_count % cleanup_interval == 0
                 ts_human = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n[{ts_human}] 开始新一轮检测...")
 
                 # ───────────── 检测步骤 1: 拍照 ─────────────
-                image_path = camera.capture_and_save(prefix="print", cleanup=should_cleanup)
+                image_path = camera.capture_and_save(prefix="print", cleanup=True)
+                
+                # 跳过未保存的图片（视频模式帧间隔控制）
+                if image_path is None:
+                    last_time = now
+                    continue
 
                 # ───────────── 检测步骤 2: YOLO 推理 ─────────────
                 # 获取检测阈值
@@ -190,11 +193,9 @@ def main():
                 annotated = results.plot()
                 if cv2.imwrite(predicted_path, annotated):
                     print(f"预测图已保存：{predicted_path}")
-                    # 定时清理旧预测图
-                    if should_cleanup:
-                        max_pictures = config.get_int('camera.max_pictures', 100)
-                        if max_pictures != 0:
-                            cleanup_old_images(predicted_dir, max_pictures)
+                    # 清理旧预测图
+                    if max_predicted != 0:
+                        cleanup_old_images(predicted_dir, max_predicted)
                 else:
                     print("预测图保存失败，跳过本轮")
                     last_time = now

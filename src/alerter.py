@@ -1,12 +1,14 @@
 """
 报警模块
 
-功能：邮件告警、邮件回复处理、Klipper打印机控制
+功能：邮件告警、邮件回复处理、多种固件打印机控制
 
 包含：
 - send_email: 发送告警邮件（支持附件）
 - EmailReplyHandler: 监听邮件回复，实现远程控制
 - KlipperClient: 通过Moonraker API控制Klipper打印机
+- OctoPrintClient: 通过API控制OctoPrint打印机
+- BambuClient: 通过MQTT控制Bambu Lab打印机
 """
 
 import smtplib
@@ -14,7 +16,9 @@ import os
 import imaplib
 import email
 import time
+import json
 import requests
+import paho.mqtt.client as mqtt
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -185,6 +189,227 @@ class KlipperClient:
         return self._request("GET", "/api/job")
 
 
+class OctoPrintClient:
+    """
+    OctoPrint API 客户端
+    
+    通过HTTP请求控制OctoPrint打印机
+    
+    使用示例：
+        client = OctoPrintClient()
+        client.stop_print()  # 停止打印
+        client.pause_print()  # 暂停打印
+    """
+    
+    def __init__(self, octoprint_url: str = "", api_key: str = ""):
+        """
+        初始化OctoPrint客户端
+        
+        Args:
+            octoprint_url: OctoPrint服务器地址，如 http://192.168.1.100:5000
+            api_key: API密钥
+            
+        Raises:
+            ValueError: 未配置octoprint_url时抛出
+        """
+        self.octoprint_url = octoprint_url if octoprint_url else config.get_str('octoprint.url', '')
+        self.api_key = api_key if api_key else config.get_str('octoprint.api_key', '')
+        
+        if not self.octoprint_url:
+            raise ValueError("OctoPrint URL 必须配置")
+        
+        # 移除末尾斜杠
+        self.octoprint_url = self.octoprint_url.rstrip('/')
+        
+        # HTTP请求头
+        self.headers = {'Content-Type': 'application/json'}
+        if self.api_key:
+            self.headers['X-API-Key'] = self.api_key
+
+    def _request(self, method: str, endpoint: str, data: dict = None):
+        """
+        发送HTTP请求到OctoPrint API
+        
+        Args:
+            method: HTTP方法，GET或POST
+            endpoint: API端点路径
+            data: 请求数据（POST时使用）
+            
+        Returns:
+            dict: 响应JSON，失败返回None
+        """
+        url = f"{self.octoprint_url}/api{endpoint}"
+        try:
+            if method.upper() == "POST":
+                response = requests.post(url, headers=self.headers, json=data, timeout=10)
+            else:
+                response = requests.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"OctoPrint API 请求失败：{e}")
+            return None
+
+    def stop_print(self):
+        """
+        停止当前打印任务
+        
+        Returns:
+            dict: API响应，失败返回None
+        """
+        return self._request("POST", "/job", {"command": "cancel"})
+
+    def pause_print(self):
+        """
+        暂停打印
+        
+        Returns:
+            dict: API响应，失败返回None
+        """
+        return self._request("POST", "/job", {"command": "pause"})
+
+    def resume_print(self):
+        """
+        恢复打印
+        
+        Returns:
+            dict: API响应，失败返回None
+        """
+        return self._request("POST", "/job", {"command": "resume"})
+
+    def get_job_status(self):
+        """
+        获取打印任务状态
+        
+        Returns:
+            dict: 任务状态信息，失败返回None
+        """
+        return self._request("GET", "/job")
+
+
+class BambuClient:
+    """
+    Bambu Lab MQTT 客户端
+    
+    通过MQTT协议控制Bambu Lab打印机
+    
+    使用示例：
+        client = BambuClient()
+        client.stop_print()  # 停止打印
+        client.pause_print()  # 暂停打印
+    """
+    
+    def __init__(self, bambu_host: str = "", access_code: str = "", serial_number: str = ""):
+        """
+        初始化Bambu MQTT客户端
+        
+        Args:
+            bambu_host: Bambu打印机IP地址，如 192.168.1.100
+            access_code: 访问代码（打印机设置中的access code）
+            serial_number: 打印机序列号
+            
+        Raises:
+            ValueError: 未配置bambu_host时抛出
+        """
+        self.bambu_host = bambu_host if bambu_host else config.get_str('bambu.host', '')
+        self.access_code = access_code if access_code else config.get_str('bambu.access_code', '')
+        self.serial_number = serial_number if serial_number else config.get_str('bambu.serial_number', '')
+        
+        if not self.bambu_host:
+            raise ValueError("Bambu 主机地址必须配置")
+        
+        # MQTT配置
+        self.mqtt_port = config.get_int('bambu.mqtt_port', 8883)
+        self.request_topic = f"device/{self.serial_number}/request"
+        
+        self._client = None
+        self._connected = False
+
+    def _connect(self):
+        """建立MQTT连接"""
+        if self._connected and self._client:
+            return True
+        
+        try:
+            self._client = mqtt.Client()
+            self._client.username_pw_set(self.serial_number, self.access_code)
+            self._client.tls_set()
+            self._client.connect(self.bambu_host, self.mqtt_port, 60)
+            self._client.loop_start()
+            self._connected = True
+            return True
+        except Exception as e:
+            print(f"Bambu MQTT 连接失败：{e}")
+            return False
+
+    def _publish(self, command: str, params: dict = None):
+        """
+        发布MQTT命令
+        
+        Args:
+            command: 命令类型 (stop/pause/resume)
+            params: 命令参数
+            
+        Returns:
+            bool: 发送成功返回True，失败返回False
+        """
+        if not self._connect():
+            return False
+        
+        try:
+            payload = {
+                "command": command,
+                "sequence_id": "0"
+            }
+            if params:
+                payload.update(params)
+            
+            result = self._client.publish(self.request_topic, json.dumps(payload))
+            return result.rc == mqtt.MQTT_ERR_SUCCESS
+        except Exception as e:
+            print(f"Bambu MQTT 发送失败：{e}")
+            return False
+
+    def stop_print(self):
+        """
+        停止当前打印任务
+        
+        Returns:
+            bool: 发送成功返回True，失败返回False
+        """
+        return self._publish("stop_print")
+
+    def pause_print(self):
+        """
+        暂停打印
+        
+        Returns:
+            bool: 发送成功返回True，失败返回False
+        """
+        return self._publish("pause")
+
+    def resume_print(self):
+        """
+        恢复打印
+        
+        Returns:
+            bool: 发送成功返回True，失败返回False
+        """
+        return self._publish("resume")
+
+    def get_job_status(self):
+        """
+        获取打印任务状态
+        
+        注意：Bambu通过MQTT主动推送状态，需要订阅report主题才能获取
+        这里返回None（需要实现订阅逻辑）
+        
+        Returns:
+            None: 暂不支持直接获取状态
+        """
+        return None
+
+
 class EmailReplyHandler:
     """
     邮件回复处理器
@@ -212,7 +437,7 @@ class EmailReplyHandler:
         - email.imap.server: IMAP服务器
         - email.imap.check_interval: 检查间隔
         - email_reply.skip_duration_min: 跳过检测时长（分钟）
-        """
+"""
         self.enabled = config.get_bool('email_reply.enabled', False)
         self.email_account = config.get_str('email.from', '')
         self.password = config.get_str('email.password', '')
@@ -224,44 +449,55 @@ class EmailReplyHandler:
         self.last_check_time = datetime.now()  # 上次检查时间
         self.skip_detection_until = None       # 跳过检测的截止时间
 
-    def _parse_reply_content(self, body):
-        """
-        解析邮件内容，提取控制指令
-        
-        Args:
-            body: 邮件正文
-            
-        Returns:
-            str: 指令 '0' 或 '1'，未识别返回None
-        """
-        if not body:
-            return None
-        body = body.strip().lower()
-        # 查找是否包含指令字符
-        for cmd in ['0', '1']:
-            if cmd in body:
-                return cmd
-        return None
-
     def _handle_stop(self):
         """
         处理停止打印指令
         
-        当收到指令 "0" 时，调用Klipper API停止打印
+        当收到指令 "0" 时，根据配置调用对应固件的API停止打印
+        支持：Klipper、OctoPrint、Bambu Lab
         """
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 收到停止打印指令 (0)")
-        try:
-            if config.get_bool('klipper.enabled'):
+        
+        printer_type = config.get_str('printer.type', 'none')
+        
+        # Klipper
+        if printer_type == 'klipper':
+            try:
                 client = KlipperClient()
                 result = client.stop_print()
                 if result is not None:
                     print("已向Klipper发送停止打印指令")
                 else:
                     print("Klipper停止打印指令发送失败")
-            else:
-                print("Klipper未启用")
-        except Exception as e:
-            print(f"停止打印失败：{e}")
+            except Exception as e:
+                print(f"Klipper停止打印失败：{e}")
+        
+        # OctoPrint
+        elif printer_type == 'octoprint':
+            try:
+                client = OctoPrintClient()
+                result = client.stop_print()
+                if result is not None:
+                    print("已向OctoPrint发送停止打印指令")
+                else:
+                    print("OctoPrint停止打印指令发送失败")
+            except Exception as e:
+                print(f"OctoPrint停止打印失败：{e}")
+        
+        # Bambu Lab
+        elif printer_type == 'bambu':
+            try:
+                client = BambuClient()
+                result = client.stop_print()
+                if result:
+                    print("已向Bambu Lab发送停止打印指令")
+                else:
+                    print("Bambu Lab停止打印指令发送失败")
+            except Exception as e:
+                print(f"Bambu Lab停止打印失败：{e}")
+        
+        elif printer_type == 'none':
+            print("未配置打印机控制")
 
     def _handle_continue(self):
         """

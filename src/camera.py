@@ -11,6 +11,7 @@ import cv2
 import os
 from datetime import datetime
 import time
+from typing import Optional
 from config import config
 
 
@@ -36,27 +37,53 @@ class Camera:
         self.cap = None  # VideoCapture对象
         
         # 检查是否使用测试视频
-        test_video_path = config.get_str('camera.test_video_path', '')
+        test_video_path = config.get_str('debug.video_path', '') or config.get_str('camera.test_video_path', '')
+        
         if test_video_path:
-            # 相对路径转换为绝对路径
             from pathlib import Path
             base_dir = Path(__file__).parent.parent
-            self.video_path = str(base_dir / test_video_path)
-            self.is_video_mode = True
+            video_abs_path = str(base_dir / test_video_path)
+            
+            if os.path.exists(video_abs_path):
+                self.video_path = video_abs_path
+                self.is_video_mode = True
+            else:
+                print(f"视频文件不存在：{video_abs_path}，使用摄像头")
+                self.video_path = None
+                self.is_video_mode = False
         else:
             self.video_path = None
             self.is_video_mode = False
         
         # 图片保存目录
-        save_dir = config.get_str('captured_dir_abs', '')
-        if not save_dir:
-            # 回退到默认目录
-            save_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
-        self.save_dir = save_dir
-        os.makedirs(self.save_dir, exist_ok=True)
+        self.captured_dir = config.get_str('captured_dir_abs', '')
+        if not self.captured_dir:
+            self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
+        os.makedirs(self.captured_dir, exist_ok=True)
+        
+        self.predicted_dir = config.get_str('predicted_dir_abs', '')
+        if not self.predicted_dir:
+            self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
+        os.makedirs(self.predicted_dir, exist_ok=True)
+        
+        # 启动时清空图片目录
+        self._cleanup_all_images()
+        
+# 视频模式帧间隔控制
+        self.frame_interval = config.get_int('debug.frame_interval', 1)
+        self.last_saved_frame_pos = -self.frame_interval  # 上次保存的帧位置，初始为负值确保第一次取第0帧
         
         # 打开视频或摄像头
         self._open_camera()
+    
+    def _cleanup_all_images(self):
+        for directory in [self.captured_dir, self.predicted_dir]:
+            for f in os.listdir(directory):
+                if f.lower().endswith(('.jpg', '.png', '.jpeg')):
+                    try:
+                        os.remove(os.path.join(directory, f))
+                    except Exception as e:
+                        print(f"清理图片失败：{f}, {e}")
 
     def _open_camera(self):
         """
@@ -91,7 +118,7 @@ class Camera:
                     self.cap.read()
                     time.sleep(0.05)
 
-    def capture_and_save(self, prefix: str = "print", cleanup: bool = False) -> str:
+    def capture_and_save(self, prefix: str = "print", cleanup: bool = False) -> Optional[str]:
         """
         拍摄一张图片并保存
         
@@ -100,7 +127,7 @@ class Camera:
             cleanup: 是否在拍摄后清理旧图片，默认为False
             
         Returns:
-            str: 保存的图片文件路径
+            tuple: (图片路径, 是否需要识别)
             
         Raises:
             RuntimeError: 读取画面失败或保存失败时抛出
@@ -108,23 +135,42 @@ class Camera:
         # 确保视频/摄像头已打开
         self._open_camera()
         
-        # 读取一帧
+# 读取一帧
         ret, frame = self.cap.read()
         if not ret:
-            # 视频模式：重新打开视频循环播放
+            # 视频模式：重新打开视频，重新从头开始
             if self.is_video_mode:
                 self.cap.release()
                 self.cap = cv2.VideoCapture(self.video_path)
+                self.last_saved_frame_pos = 0
                 ret, frame = self.cap.read()
                 if not ret:
                     raise RuntimeError("无法读取视频画面")
             else:
                 raise RuntimeError("无法读取摄像头画面")
+        
+        # 视频模式：跳到上次保存位置 + frame_interval
+        if self.is_video_mode and self.frame_interval > 1:
+            target_pos = self.last_saved_frame_pos + self.frame_interval
+            total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            if target_pos >= total_frames:
+                # 视频结束，退出程序
+                print(f"视频已处理完毕，共 {total_frames} 帧")
+                raise SystemExit(0)
+            
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, target_pos)
+            ret, frame = self.cap.read()
+            if not ret:
+                raise RuntimeError("无法读取视频画面")
+            
+            self.last_saved_frame_pos = target_pos
+            print(f"跳到第 {target_pos}/{total_frames} 帧")
 
         # 生成文件名：前缀_时间戳.jpg
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{prefix}_{ts}.jpg"
-        save_path = os.path.join(self.save_dir, filename)
+        save_path = os.path.join(self.captured_dir, filename)
 
         # 保存图片
         if not cv2.imwrite(save_path, frame):
@@ -132,9 +178,9 @@ class Camera:
 
         # 可选：清理旧图片
         if cleanup:
-            max_pictures = config.get_int('camera.max_pictures', 100)
-            if max_pictures != 0:
-                cleanup_old_images(self.save_dir, max_pictures)
+            max_captured = config.get_int('camera.max_captured', 3)
+            if max_captured != 0:
+                cleanup_old_images(self.captured_dir, max_captured)
 
         print(f"已拍摄：{save_path}")
         return save_path
