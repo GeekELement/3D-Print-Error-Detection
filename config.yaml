@@ -4,93 +4,90 @@
 # 2. # 开头的为注释行
 # 3. 缩进必须使用空格，不能使用Tab
 
-# ───────────── 模型配置 ─────────────
-model:
-  # YOLO 模型文件路径
-  path: "best.pt"
-  # YOLO 常规检测置信度阈值 (0.0-1.0)
-  conf_threshold: 0.1
-  # 报警置信度阈值 (0.0-1.0)
-  alert_conf_threshold: 0.65
-  # 炒面(spaghetti)告警面积阈值(像素²)，面积小于此值时不告警
-  spaghetti_area_threshold: 2000
-  # 是否启用CUDA加速 (需要GPU和PyTorch CUDA版本)
-  use_cuda: true
-
-# ───────────── 摄像头配置 ─────────────
-camera:
-  # 测试视频路径（设为视频文件路径则使用视频，为空则使用摄像头）
-  test_video_path: "test-demo/test1.mp4"
-  # 摄像头索引 (0为默认摄像头)
-  index: 0
-  # 摄像头分辨率 - 宽度
-  width: 640
-  # 摄像头分辨率 - 高度
-  height: 480
-  # 摄像头预热帧数 (用于自动曝光/白平衡稳定)
-  warmup_frames: 8
-  # 图片保留最大数量，0=保存全部，正整数=保留最新n张
-  max_pictures: 3
-  # 图片清理间隔（每N次检测清理一次），建议设为1
-  cleanup_interval: 1
-
-# ───────────── 监控配置 ─────────────
-monitoring:
-  # 检测间隔（秒）
-  interval_sec: 5
-
-# ───────────── 目录配置 ─────────────
-directories:
-  # 项目根目录（相对于此配置文件的目录）
-  project_root: ".."
-  # 预测图片保存目录（相对于项目根目录）
-  predicted_dir: "images/predicted"
-  # 原始图片保存目录（相对于项目根目录）
-  captured_dir: "images/captured"
-
-# ───────────── 邮件报警配置 ─────────────
-email:
-  # 是否启用邮件报警
-  enabled: true
-  # 接收邮件地址
-  to: "geekelement@outlook.com"
-  # 发送邮件地址
-  from: "geekelement@foxmail.com"
-  # 授权码/应用密码（非邮箱登录密码）
-  password: "uxdrpmvghbffdbbj"
-  # SMTP 服务器设置
-  smtp:
-    server: "smtp.qq.com"
-    port: 465
-    # 是否使用SSL连接
-    use_ssl: true
-  # IMAP 服务器设置（用于接收回复邮件）
-  imap:
-    server: "imap.qq.com"
-    # 检查邮件回复的间隔（秒）
-    check_interval: 10
-
-# ───────────── 邮件回复处理配置 ─────────────
-email_reply:
-  # 是否启用邮件回复处理
-  enabled: true
-  # 邮件主题标识（用于识别告警邮件的回复）
-  subject_prefix: "【3D打印异常警报】"
-  # 回复停止打印（1）后跳过检测的时长（分钟）
-  skip_duration_min: 10
-
-# ───────────── Klipper 配置（直接控制打印机）────────────
-klipper:
-  # 是否启用 Klipper 控制
-  enabled: true
-  # Moonraker 服务器地址
-  url: "http://192.168.9.99:7125"
-  # API 密钥（如需要）
-  api_key: ""
-
-# ───────────── 程序其他设置 ─────────────
+# ═══════════════════════════════════════════════════════════════
+# 程序设置
+# ═══════════════════════════════════════════════════════════════
 app:
-  # 程序显示名称
   name: "3D打印异常检测系统"
-  # 日志级别 (DEBUG, INFO, WARNING, ERROR)
-  log_level: "INFO"
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+# ═══════════════════════════════════════════════════════════════
+# 目录配置
+# ═══════════════════════════════════════════════════════════════
+directories:
+  project_root: ".."  # 项目根目录（相对于此配置文件）
+  predicted_dir: "images/predicted"  # 预测图片保存目录
+  captured_dir: "images/captured"  # 原始图片保存目录
+
+# ═══════════════════════════════════════════════════════════════
+# 模型配置
+# ═══════════════════════════════════════════════════════════════
+model:
+  path: "best.pt"  # YOLO 模型文件路径
+  conf_threshold: 0.3  # YOLO 常规检测置信度阈值 (0.0-1.0)
+  alert_conf_threshold: 0.65  # 报警置信度阈值 (0.0-1.0)
+  spaghetti_area_threshold: 2000  # 炒面(spaghetti)告警面积阈值(像素²)
+  use_cuda: true  # 是否启用CUDA加速 (需要GPU和PyTorch CUDA版本)
+
+# ═══════════════════════════════════════════════════════════════
+# 摄像头配置
+# ═══════════════════════════════════════════════════════════════
+camera:
+  index: 0  # 摄像头索引 (0为默认摄像头)
+  width: 640  # 摄像头分辨率 - 宽度
+  height: 480  # 摄像头分辨率 - 高度
+  warmup_frames: 8  # 摄像头预热帧数 (用于自动曝光/白平衡稳定)
+  max_pictures: 3  # 图片保留最大数量，0=保存全部
+  cleanup_interval: 1  # 图片清理间隔（每N次检测清理一次）
+  test_video_path: ""  # 测试视频路径（为空则使用摄像头）
+
+# ═══════════════════════════════════════════════════════════════
+# 监控配置
+# ═══════════════════════════════════════════════════════════════
+monitoring:
+  interval_sec: 5  # 检测间隔（秒）
+
+# ═══════════════════════════════════════════════════════════════
+# 打印机配置
+# ═══════════════════════════════════════════════════════════════
+printer:
+  type: "klipper"  # 打印机固件类型: klipper, bambu, octoprint（为空则不控制打印机）
+
+# ----- Klipper 配置 -----
+klipper:
+  url: "http://192.168.9.99:7125"  # Moonraker 服务器地址
+  api_key: ""  # API 密钥（如需要）
+
+# ----- 拓竹 Bambu 配置 -----
+bambu:
+  printer_ip: "192.168.1.100"  # 打印机 IP 地址
+  access_code: "123456"  # 打印机 Access Code（机身标签上的6位码）
+  serial_number: "01GW1234567890"  # 打印机序列号
+
+# ----- OctoPrint 配置 -----
+octoprint:
+  url: "http://192.168.1.100:5000"  # OctoPrint 服务器地址
+  api_key: "YOUR_API_KEY"  # API 密钥
+
+# ═══════════════════════════════════════════════════════════════
+# 邮件告警配置
+# ═══════════════════════════════════════════════════════════════
+email:
+  enabled: true
+  from: "geekelement@foxmail.com"  # 发送邮件地址
+  password: "uxdrpmvghbffdbbj"  # 授权码/应用密码（非邮箱登录密码）
+  to: "geekelement@outlook.com"  # 接收邮件地址
+
+  smtp:
+    server: "smtp.qq.com"  # SMTP 服务器
+    port: 465  # SMTP 端口
+    use_ssl: true  # 是否使用SSL连接
+
+  imap:
+    server: "imap.qq.com"  # IMAP 服务器（用于接收回复邮件）
+    check_interval: 10  # 检查邮件回复的间隔（秒）
+
+# ----- 邮件回复控制配置 -----
+email_reply:
+  enabled: true
+  skip_duration_min: 10  # 回复继续打印后跳过检测的时长（分钟）

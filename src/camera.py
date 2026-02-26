@@ -35,61 +35,61 @@ class Camera:
         self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
         self.cap = None  # VideoCapture对象
         
-        # 检查是否使用测试视频
+        # 检测视频文件是否存在
         test_video_path = config.get_str('camera.test_video_path', '')
         if test_video_path:
-            # 相对路径转换为绝对路径
             from pathlib import Path
             base_dir = Path(__file__).parent.parent
             self.video_path = str(base_dir / test_video_path)
-            self.is_video_mode = True
+            self.is_video_mode = os.path.exists(self.video_path)
         else:
             self.video_path = None
             self.is_video_mode = False
         
+        # 视频模式：每隔几帧检测一次（节省资源）
+        self.video_skip_frames = config.get_int('camera.video_skip_frames', 0)
+        
         # 图片保存目录
         save_dir = config.get_str('captured_dir_abs', '')
         if not save_dir:
-            # 回退到默认目录
             save_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
         
-        # 打开视频或摄像头
-        self._open_camera()
+        # 视频不存在时，立即初始化摄像头并预热
+        if not self.is_video_mode:
+            self._open_camera(warmup=True)
 
-    def _open_camera(self):
+    def _open_camera(self, warmup=False):
         """
-        内部方法：打开视频或摄像头并预热
+        打开视频或摄像头
         
-        如果配置了test_video_path，则打开视频文件
-        否则使用DSHOW后端打开摄像头
+        Args:
+            warmup: 是否预热摄像头（仅在不使用视频时有效）
         """
         if self.cap is None or not self.cap.isOpened():
             if self.is_video_mode:
-                # 打开视频文件
                 self.cap = cv2.VideoCapture(self.video_path)
-                if not self.cap.isOpened():
+                if self.cap.isOpened():
+                    print(f"已打开视频: {self.video_path}")
+                else:
                     raise RuntimeError(f"无法打开视频 {self.video_path}")
-                print(f"已打开视频: {self.video_path}")
             else:
-                # 使用DSHOW后端，Windows平台推荐
                 self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
                 if not self.cap.isOpened():
                     raise RuntimeError(f"无法打开摄像头 {self.camera_index}")
 
-                # 设置分辨率
-                width = config.get_int('camera.width', 640)
-                height = config.get_int('camera.height', 480)
-                self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-                self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                if warmup:
+                    width = config.get_int('camera.width', 640)
+                    height = config.get_int('camera.height', 480)
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
-                # 预热摄像头（让自动曝光、白平衡稳定下来）
-                warmup_frames = config.get_int('camera.warmup_frames', 8)
-                print("摄像头预热中...")
-                for _ in range(warmup_frames):
-                    self.cap.read()
-                    time.sleep(0.05)
+                    warmup_frames = config.get_int('camera.warmup_frames', 8)
+                    print("摄像头预热中...")
+                    for _ in range(warmup_frames):
+                        self.cap.read()
+                        time.sleep(0.05)
 
     def capture_and_save(self, prefix: str = "print", cleanup: bool = False) -> str:
         """
@@ -108,10 +108,14 @@ class Camera:
         # 确保视频/摄像头已打开
         self._open_camera()
         
+        # 视频模式：跳过帧以降低检测频率
+        if self.is_video_mode and self.video_skip_frames > 0:
+            for _ in range(self.video_skip_frames):
+                self.cap.read()
+        
         # 读取一帧
         ret, frame = self.cap.read()
         if not ret:
-            # 视频模式：重新打开视频循环播放
             if self.is_video_mode:
                 self.cap.release()
                 self.cap = cv2.VideoCapture(self.video_path)

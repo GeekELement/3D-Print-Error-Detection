@@ -16,19 +16,23 @@
 - **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷
 - **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件
 - **📩 邮件控制**：支持通过邮件回复远程控制打印机（停止/继续打印）
-- **🔧 Klipper集成**：通过Moonraker API直接控制Klipper打印机
+- **🔧 多打印机支持**：支持 Klipper、拓竹 Bambu、OctoPrint 三种固件
 - **💾 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
 - **⚙️ YAML配置**：使用YAML文件统一管理所有配置参数
+- **🎬 视频调试**：支持视频文件测试，无需连接实际打印机
 
 ## 技术栈
 
-- **编程语言**: Python 3.7+
-- **深度学习框架**: PyTorch, YOLOv8 (ultralytics)
-- **计算机视觉库**: OpenCV
-- **配置管理**: PyYAML
-- **HTTP客户端**: requests
+- **编程语言**: Python 3.8+
+- **深度学习框架**: PyTorch 2.5.1 (CUDA 12.1)
+- **目标检测模型**: YOLOv8 (ultralytics 8.4.14)
+- **计算机视觉库**: OpenCV 4.13.0
+- **配置管理**: PyYAML 6.0.3
+- **HTTP客户端**: requests 2.32.5
 - **邮件协议**: SMTP, IMAP
-- **打印机控制**: Klipper/Moonraker API
+- **MQTT协议**: paho-mqtt (用于拓竹打印机)
+- **图像处理**: Pillow 12.1.1, NumPy 2.2.6
+- **打印机控制**: Klipper/Moonraker API, Bambu MQTT, OctoPrint HTTP API
 
 ## 快速开始
 
@@ -51,28 +55,23 @@
    ```bash
    pip install -r requirements.txt
    ```
-   核心依赖：`opencv-python>=4.6.0`, `torch>=1.7.0`, `ultralytics>=8.0.0`, `requests>=2.23.0`, `PyYAML>=6.0`, `numpy>=1.21.0`
+   核心依赖：`opencv-python>=4.6.0`, `torch>=1.7.0`, `ultralytics>=8.0.0`, `requests>=2.23.0`, `PyYAML>=6.0`, `numpy>=1.21.0`, `paho-mqtt>=1.6.0`
 
 3. **配置参数**
    编辑 `config.yaml` 配置文件
 
 4. **运行程序**
-   - 实时监控模式：
-     ```bash
-     python src/main.py
-     ```
-   - 视频测试模式：
-     ```bash
-     python test-demo/test.py
-     ```
+   ```bash
+   python src/main.py
+   ```
 
-### 测试demo
+### 视频调试
 
-`test-demo/test.py` 可独立运行，不依赖src模块：
-- 支持视频文件检测
-- 自动输出带标注的结果视频
-- 实时显示FPS
-- 自动检测CUDA可用性
+在 `config.yaml` 中配置视频路径即可使用视频测试：
+```yaml
+camera:
+  test_video_path: "test.mp4"  # 填入视频路径，为空则使用摄像头
+```
 
 ## 项目结构
 
@@ -85,15 +84,11 @@
 ├── images/                       # 图片存储目录
 │   ├── captured/                 # 原始拍摄图片
 │   └── predicted/                # 带标注的预测图片
-├── test-demo/                    # 测试demo
-│   ├── test.py                   # 视频检测脚本
-│   ├── test1.mp4                 # 测试视频
-│   └── output/                   # 输出目录
 └── src/                          # 源代码目录
     ├── main.py                   # 主程序入口
     ├── config.py                 # YAML配置加载
     ├── camera.py                 # 摄像头操作 + 图片清理
-    ├── alerter.py                # 邮件告警 + 邮件回复 + Klipper控制
+    ├── alerter.py                # 邮件告警 + 邮件回复 + 打印机控制
     └── device.py                 # 设备管理（GPU/CPU）
 ```
 
@@ -118,7 +113,9 @@
 ### 4. 报警模块 (`alerter.py`)
 - `send_email`: SMTP邮件发送，支持附件
 - `EmailReplyHandler`: 监听IMAP邮箱，识别告警邮件回复
-- `KlipperClient`: 通过Moonraker API控制打印机
+- `KlipperClient`: 通过Moonraker API控制Klipper打印机
+- `BambuClient`: 通过MQTT协议控制拓竹打印机
+- `OctoPrintClient`: 通过HTTP API控制OctoPrint打印机
 
 ### 5. 主程序 (`main.py`)
 - YOLOv8模型加载和推理
@@ -151,6 +148,7 @@ camera:
   warmup_frames: 8      # 预热帧数
   max_pictures: 3       # 保存图片最大数量
   cleanup_interval: 1   # 图片清理间隔（每N次检测清理一次）
+  test_video_path: ""   # 测试视频路径，为空则使用摄像头
 ```
 
 ### 模型配置
@@ -192,11 +190,25 @@ email_reply:
   skip_duration_min: 10   # 回复1后跳过检测的时长（分钟）
 ```
 
-### Klipper配置
+### 打印机配置
 ```yaml
+printer:
+  type: "klipper"  # 打印机类型: klipper, bambu, octoprint（为空则不控制打印机）
+
+# Klipper 配置
 klipper:
-  enabled: true
   url: "http://192.168.1.100:7125"
+  api_key: "你的API密钥"
+
+# 拓竹 Bambu 配置
+bambu:
+  printer_ip: "192.168.1.100"
+  access_code: "123456"  # 机身标签上的6位码
+  serial_number: "01GW1234567890"
+
+# OctoPrint 配置
+octoprint:
+  url: "http://192.168.1.100:5000"
   api_key: "你的API密钥"
 ```
 
@@ -207,9 +219,10 @@ klipper:
 - 邮件发送需要SMTP授权码（非登录密码）
 - 邮件回复需要开启IMAP服务
 - YAML配置文件使用空格缩进，不支持Tab
-- Klipper控制需要先配置Moonraker
+- 打印机控制根据 `printer.type` 自动选择，无需单独启用
 - 程序支持Ctrl+C优雅退出
 - 如需CUDA加速，需安装PyTorch CUDA版本，并在config.yaml中设置 `model.use_cuda: true`
+- 调试时可设置 `camera.test_video_path` 使用视频文件测试
 
 ## 邮件回复控制
 
@@ -223,11 +236,8 @@ klipper:
 
 项目设计支持多种扩展：
 - 添加新的检测模型
-- 集成更多打印机控制接口
 - 支持数据库存储历史记录
 - 添加Web界面管理
-- 支持多种告警方式（微信、短信等）
-
 ## 联系
 
 - 邮箱：geekelement@outlook.com

@@ -22,6 +22,8 @@ from email.mime.base import MIMEBase
 from email import encoders
 from email.header import decode_header
 from config import config
+import paho.mqtt.client as mqtt
+import json
 
 
 def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: str = "",
@@ -88,6 +90,202 @@ def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: 
     except Exception as e:
         print(f"发送邮件失败：{e}")
         return False
+
+
+class OctoPrintClient:
+    """
+    OctoPrint API 客户端
+    
+    通过HTTP请求控制OctoPrint打印机
+    
+    使用示例：
+        client = OctoPrintClient()
+        client.stop_print()  # 停止打印
+        client.pause_print()  # 暂停打印
+    """
+    
+    def __init__(self, octoprint_url: str = "", api_key: str = ""):
+        """
+        初始化OctoPrint客户端
+        
+        Args:
+            octoprint_url: OctoPrint服务器地址，如 http://192.168.1.100:5000
+            api_key: API密钥
+            
+        Raises:
+            ValueError: 未配置octoprint_url时抛出
+        """
+        self.octoprint_url = octoprint_url if octoprint_url else config.get_str('octoprint.url', '')
+        self.api_key = api_key if api_key else config.get_str('octoprint.api_key', '')
+        
+        if not self.octoprint_url:
+            raise ValueError("OctoPrint URL 必须配置")
+        
+        self.headers = {'Content-Type': 'application/json'}
+        if self.api_key:
+            self.headers['X-Api-Key'] = self.api_key
+
+    def _request(self, method: str, endpoint: str, data: dict = None):
+        """
+        发送HTTP请求到OctoPrint API
+        
+        Args:
+            method: HTTP方法，GET或POST
+            endpoint: API端点路径
+            data: 请求数据（POST时使用）
+            
+        Returns:
+            dict: 响应JSON，失败返回None
+        """
+        url = f"{self.octoprint_url}{endpoint}"
+        try:
+            if method.upper() == "POST":
+                response = requests.post(url, headers=self.headers, json=data, timeout=10)
+            else:
+                response = requests.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"OctoPrint API 请求失败：{e}")
+            return None
+
+    def stop_print(self):
+        """
+        停止当前打印任务
+        
+        Returns:
+            dict: API响应，失败返回None
+        """
+        return self._request("POST", "/api/job", {"command": "cancel"})
+
+    def pause_print(self):
+        """
+        暂停打印
+        
+        Returns:
+            dict: API响应，失败返回None
+        """
+        return self._request("POST", "/api/job", {"command": "pause", "action": "pause"})
+
+    def resume_print(self):
+        """
+        恢复打印
+        
+        Returns:
+            dict: API响应，失败返回None
+        """
+        return self._request("POST", "/api/job", {"command": "pause", "action": "resume"})
+
+    def get_job_status(self):
+        """
+        获取打印任务状态
+        
+        Returns:
+            dict: 任务状态信息，失败返回None
+        """
+        return self._request("GET", "/api/job")
+
+
+class BambuClient:
+    """
+    拓竹 Bambu 打印机 MQTT 客户端
+    
+    通过MQTT协议控制拓竹打印机
+    
+    使用示例：
+        client = BambuClient()
+        client.stop_print()  # 停止打印
+    """
+    
+    def __init__(self, printer_ip: str = "", access_code: str = "", serial_number: str = ""):
+        """
+        初始化拓竹客户端
+        
+        Args:
+            printer_ip: 打印机IP地址
+            access_code: 打印机access code（机身标签上）
+            serial_number: 打印机序列号
+            
+        Raises:
+            ValueError: 未配置printer_ip时抛出
+        """
+        self.printer_ip = printer_ip if printer_ip else config.get_str('bambu.printer_ip', '')
+        self.access_code = access_code if access_code else config.get_str('bambu.access_code', '')
+        self.serial_number = serial_number if serial_number else config.get_str('bambu.serial_number', '')
+        
+        if not self.printer_ip:
+            raise ValueError("拓竹打印机IP必须配置")
+        
+        self.port = 1883
+        self.topic = f"device/{self.serial_number}/request"
+        self._client = None
+        self._connected = False
+        
+    def _on_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            self._connected = True
+            print(f"已连接到拓竹打印机 {self.printer_ip}")
+        else:
+            print(f"连接拓竹打印机失败，错误码：{rc}")
+            
+    def _on_disconnect(self, client, userdata, rc):
+        self._connected = False
+        
+    def _connect(self):
+        if self._client and self._connected:
+            return True
+            
+        self._client = mqtt.Client(client_id="bambu_monitor")
+        self._client.username_pw_set("bblp", self.access_code)
+        self._client.on_connect = self._on_connect
+        self._client.on_disconnect = self._on_disconnect
+        
+        try:
+            self._client.connect(self.printer_ip, self.port, keepalive=30)
+            self._client.loop_start()
+            
+            for _ in range(10):
+                if self._connected:
+                    return True
+                time.sleep(0.5)
+            return False
+        except Exception as e:
+            print(f"连接拓竹打印机出错：{e}")
+            return False
+            
+    def stop_print(self):
+        """
+        停止当前打印任务
+        
+        Returns:
+            bool: 发送成功返回True，失败返回False
+        """
+        if not self._connect():
+            return False
+            
+        command = {
+            "print": {
+                "command": "stop"
+            }
+        }
+        
+        try:
+            result = self._client.publish(self.topic, json.dumps(command))
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                print(f"已发送停止打印指令到拓竹打印机 {self.printer_ip}")
+                return True
+            else:
+                print(f"发送停止打印指令失败，错误码：{result.rc}")
+                return False
+        except Exception as e:
+            print(f"发送停止打印指令出错：{e}")
+            return False
+            
+    def disconnect(self):
+        if self._client:
+            self._client.loop_stop()
+            self._client.disconnect()
+            self._connected = False
 
 
 class KlipperClient:
@@ -247,21 +445,61 @@ class EmailReplyHandler:
         """
         处理停止打印指令
         
-        当收到指令 "0" 时，调用Klipper API停止打印
+        当收到指令 "0" 时，根据printer.type调用对应API停止打印
         """
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 收到停止打印指令 (0)")
+        
+        printer_type = config.get_str('printer.type', '').lower()
+        
+        if not printer_type:
+            print("未配置打印机类型，跳过停止打印")
+            return
+        
+        stopped = False
+        error_msg = ""
+        
         try:
-            if config.get_bool('klipper.enabled'):
+            if printer_type == 'klipper':
                 client = KlipperClient()
                 result = client.stop_print()
                 if result is not None:
                     print("已向Klipper发送停止打印指令")
+                    stopped = True
                 else:
-                    print("Klipper停止打印指令发送失败")
+                    error_msg = "Klipper连接失败或打印机掉线"
+                    
+            elif printer_type == 'bambu':
+                client = BambuClient()
+                result = client.stop_print()
+                if result:
+                    print("已向拓竹打印机发送停止打印指令")
+                    stopped = True
+                else:
+                    error_msg = "拓竹打印机连接失败或打印机掉线"
+                    
+            elif printer_type == 'octoprint':
+                client = OctoPrintClient()
+                result = client.stop_print()
+                if result is not None:
+                    print("已向OctoPrint发送停止打印指令")
+                    stopped = True
+                else:
+                    error_msg = "OctoPrint连接失败或打印机掉线"
+                    
             else:
-                print("Klipper未启用")
+                print(f"未知的打印机类型: {printer_type}")
+                return
+                
+        except ValueError as e:
+            error_msg = str(e)
         except Exception as e:
-            print(f"停止打印失败：{e}")
+            error_msg = f"打印机控制异常: {e}"
+        
+        if error_msg:
+            print(f"停止打印失败: {error_msg}")
+        
+        if not stopped:
+            print("请检查打印机连接后重试")
 
     def _handle_continue(self):
         """
