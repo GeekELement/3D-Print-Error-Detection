@@ -11,7 +11,7 @@
 
 ## 核心功能
 
-- **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认5秒/次，可配置）
+- **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认3秒/次，可配置）
 - **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷
 - **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件
 - **📩 邮件控制**：支持通过邮件回复远程控制打印机（停止/继续打印）
@@ -68,6 +68,7 @@
 ├── README.md                     # 项目说明文档
 ├── requirements.txt              # Python依赖包列表
 ├── config.yaml                   # 配置文件
+├── config.yaml.example           # 配置文件模板
 ├── best.pt                       # 训练好的YOLOv8模型权重
 ├── images/                       # 图片存储目录
 │   ├── captured/                 # 原始拍摄图片
@@ -89,7 +90,7 @@
 
 ### 2. 设备管理 (`device.py`)
 - 自动检测GPU可用性
-- 根据配置决定是否使用CUDA加速
+- YOLO模型自动选择GPU/CPU
 - 提供设备信息查询
 
 ### 3. 摄像头模块 (`camera.py`)
@@ -111,85 +112,143 @@
 - 实时检测和结果分析
 - 阈值判断和告警决策
 - 炒面(spaghetti)面积并集计算
+- **多帧检测**（借鉴Bambu Lab拓竹炒面检测原理）
+
+## 多帧检测算法（借鉴Bambu Lab）
+
+本项目的多帧检测逻辑借鉴了 **Bambu Lab X1** 的炒面检测原理：
+
+### 核心思路
+1. **多帧累积**：不依赖单帧判断，而是累积多帧检测结果
+2. **阳性帧计数**：只有检测到符合参数的的帧才计入阳性帧
+3. **面积验证**：当阳性帧数达到阈值后，验证当前帧面积是否超过面积阈值
+
+### 检测流程
+```
+每帧检测 → 是否检测到spaghetti?
+         ↓
+    阳性帧+1，存入历史
+         ↓
+    阳性帧数 >= required_frames?
+         ↓
+    是 → 检查当前帧面积 >= area_threshold?
+         ↓
+    是 → 触发告警 → 发邮件 → 清零历史
+```
+
+### 配置参数
+```yaml
+multi_frame:
+  enabled: true              # 是否启用多帧检测
+  required_frames: 5         # 阳性帧数达到此值后验证面积
+  alert_conf_threshold: 0.65 # 置信度阈值 (0.0-1.0)
+  area_threshold: 900        # 面积阈值 (像素²)
+```
+
+### 优势
+- 减少误报：单帧的短暂异常不会触发告警
+- 更可靠：需要持续检测到异常才告警
+- 可调参数：可根据打印速度调整帧数和阈值
 
 ## 配置说明
 
 ### 调试模式
 ```yaml
 debug:
-  video_path: "test-demo/test1.mp4"   # 视频文件路径，为空使用摄像头
-  frame_interval: 60                   # 视频模式每多少帧取一张（1=每帧都取）
-```
-
-### 摄像头配置
-```yaml
-camera:
-  index: 0              # 摄像头索引
-  width: 640            # 图像宽度
-  height: 480           # 图像高度
-  warmup_frames: 8      # 预热帧数
-  max_captured: 3       # captured目录保留图片数量，0=保留全部
-  max_predicted: 3      # predicted目录保留图片数量，0=保留全部
+  video_path: ""              # 视频文件路径，留空使用摄像头
+  frame_interval: 30           # 视频模式：每隔多少帧识别一次
 ```
 
 ### 模型配置
 ```yaml
 model:
-  path: "best.pt"                # 模型文件路径
-  conf_threshold: 0.3            # 常规检测置信度阈值
-  alert_conf_threshold: 0.65     # 告警置信度阈值
-  spaghetti_area_threshold: 2000 # 炒面告警面积阈值(像素²)
-  use_cuda: true                 # 是否启用CUDA加速
+  path: "best.pt"            # YOLO 模型文件路径
+  conf_threshold: 0.5         # 检测置信度阈值 (0.0-1.0)，低于此值不检测
+```
+
+### 多帧检测配置
+```yaml
+multi_frame:
+  enabled: true              # 是否启用多帧检测
+  required_frames: 5          # 阳性帧数达到此值后验证面积
+  alert_conf_threshold: 0.65 # 置信度阈值 (0.0-1.0)
+  area_threshold: 900        # 面积阈值 (像素²)
 ```
 
 ### 监控配置
 ```yaml
 monitoring:
-  interval_sec: 5   # 检测间隔（秒）
+  interval_sec: 3            # 检测间隔（秒）
+```
+
+### 摄像头配置
+```yaml
+camera:
+  index: 0                   # 摄像头索引 (0=默认摄像头)
+  width: 640                 # 分辨率宽度
+  height: 480                # 分辨率高度
+  warmup_frames: 8            # 预热帧数 (自动曝光/白平衡稳定)
+  max_captured: 1            # captured目录保留最新图片数量，0=保留全部
+  max_predicted: 1           # predicted目录保留最新图片数量，0=保留全部
+```
+
+### 目录配置
+```yaml
+directories:
+  project_root: ".."         # 项目根目录
+  predicted_dir: "images/predicted"  # 预测图片保存目录
+  captured_dir: "images/captured"    # 原始图片保存目录
 ```
 
 ### 邮件配置
 ```yaml
 email:
-  enabled: true
-  to: "接收邮箱@domain.com"
-  from: "发送邮箱@domain.com"
-  password: "SMTP授权码"
+  enabled: true               # 是否启用邮件报警
+  to: "your_email@domain.com"   # 接收邮件地址
+  from: "your_email@domain.com" # 发送邮件地址
+  password: "xxxx"           # SMTP授权码/应用密码
   smtp:
-    server: "smtp.qq.com"
-    port: 465
-    use_ssl: true
+    server: "smtp.qq.com"   # SMTP服务器
+    port: 465               # SMTP端口
+    use_ssl: true           # 是否使用SSL
   imap:
-    server: "imap.qq.com"
-    check_interval: 10    # 检查邮件回复间隔（秒）
+    server: "imap.qq.com"   # IMAP服务器（用于接收回复）
+    check_interval: 10      # 检查间隔（秒）
 ```
 
 ### 邮件回复配置
 ```yaml
 email_reply:
-  enabled: true
-  subject_prefix: "【3D打印异常警报】"
-  skip_duration_min: 10   # 回复1后跳过检测的时长（分钟）
+  enabled: false             # 是否启用邮件回复处理
+  subject_prefix: "【3D打印异常警报】"  # 告警邮件主题标识
+  skip_duration_min: 10     # 回复后跳过检测时长（分钟）
 ```
 
 ### 打印机配置
 ```yaml
 printer:
-  type: "klipper"  # 打印机固件类型: klipper, octoprint, bambu, none
+  type: "none"              # 打印机类型: klipper, octoprint, bambu, none
 
   klipper:
-    url: "http://192.168.1.100:7125"   # Moonraker服务器地址
-    api_key: ""                         # API密钥（可选）
+    url: "http://192.168.1.100:7125"  # Moonraker服务器地址
+    api_key: ""             # API密钥
 
   octoprint:
-    url: "http://192.168.1.100:5000"   # OctoPrint服务器地址
-    api_key: ""                         # API密钥
+    url: "http://192.168.1.100:5000"  # OctoPrint服务器地址
+    api_key: ""             # API密钥
 
   bambu:
-    host: "192.168.1.100"              # 打印机IP地址
-    mqtt_port: 8883                    # MQTT端口 (8883=SSL, 1883=非SSL)
-    access_code: ""                    # 访问代码
-    serial_number: ""                  # 打印机序列号
+    host: "192.168.1.100"   # 打印机IP地址
+    mqtt_port: 8883         # MQTT端口 (8883=SSL, 1883=非SSL)
+    access_code: ""         # 访问代码
+    serial_number: ""       # 打印机序列号
+```
+
+### 程序设置
+```yaml
+app:
+  name: "3D打印异常检测系统"
+  log_level: "INFO"         # 日志级别: DEBUG, INFO, WARNING, ERROR
 ```
 
 ## 邮件回复控制

@@ -17,6 +17,127 @@ from config import config
 from device import CudaUtils
 
 
+def compute_iou(box1, box2):
+    """计算两个边界框的IoU（交并比）"""
+    x1_1, y1_1, x2_1, y2_1 = box1
+    x1_2, y1_2, x2_2, y2_2 = box2
+    
+    # 计算交集区域
+    x1_i = max(x1_1, x1_2)
+    y1_i = max(y1_1, y1_2)
+    x2_i = min(x2_1, x2_2)
+    y2_i = min(y2_1, y2_2)
+    
+    if x2_i <= x1_i or y2_i <= y1_i:
+        return 0.0
+    
+    intersection = (x2_i - x1_i) * (y2_i - y1_i)
+    
+    # 计算各自的面积
+    area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+    area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+    
+    union = area1 + area2 - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+def compute_box_intersection_area(boxes):
+    """计算多个边界框的交集面积"""
+    if not boxes:
+        return 0
+    
+    if len(boxes) == 1:
+        x1, y1, x2, y2 = boxes[0]
+        return max(0, x2 - x1) * max(0, y2 - y1)
+    
+    # 从第一个框开始，逐步计算与后续框的交集
+    result_box = list(boxes[0])
+    
+    for box in boxes[1:]:
+        x1_i = max(result_box[0], box[0])
+        y1_i = max(result_box[1], box[1])
+        x2_i = min(result_box[2], box[2])
+        y2_i = min(result_box[3], box[3])
+        
+        if x2_i <= x1_i or y2_i <= y1_i:
+            return 0  # 无交集
+        
+        result_box = [x1_i, y1_i, x2_i, y2_i]
+    
+    return max(0, result_box[2] - result_box[0]) * max(0, result_box[3] - result_box[1])
+
+
+class DetectionHistory:
+    """多帧检测历史"""
+    
+    def __init__(self):
+        self.frames = []  # 每帧检测结果: {'spaghetti': bool, 'boxes': [], 'conf': float, 'area': int, 'timestamp': float}
+        self._alerted = False  # 是否已发送过告警
+    
+    def add_frame(self, has_spaghetti: bool, boxes: list, max_conf: float = 0, total_area: int = 0):
+        """添加一帧检测结果"""
+        self.frames.append({
+            'spaghetti': has_spaghetti,
+            'boxes': boxes,
+            'conf': max_conf,
+            'area': total_area,
+            'timestamp': time.time()
+        })
+        self._alerted = False
+    
+    def get_positive_frames(self):
+        """获取所有阳性帧"""
+        return [f for f in self.frames if f['spaghetti'] and f['boxes']]
+    
+    def check_multi_frame_alert(self, required_frames: int, area_threshold: float = 5000) -> tuple:
+        """
+        检查是否满足多帧告警条件
+        
+        逻辑：
+        1. 阳性帧计数 >= required_frames
+        2. 当前帧面积 >= 阈值
+        
+        触发后清零重新计数
+        
+        Returns:
+            (should_alert, details)
+        """
+        if self._alerted:
+            return False, ""
+        
+        positive_count = len(self.get_positive_frames())
+        
+        # 阳性帧数不足
+        if positive_count < required_frames:
+            return False, f"阳性帧不足 ({positive_count}/{required_frames})"
+        
+        # 检查当前帧的面积
+        current_frame = self.frames[-1]
+        current_area = current_frame['area']
+        current_conf = current_frame['conf']
+        
+        avg_conf = np.mean([f['conf'] for f in self.frames if f['spaghetti']][:required_frames])
+        
+        print(f"  -> 多帧检查: 阳性{positive_count}帧, "
+              f"当前帧面积:{current_area}px², 置信度:{current_conf:.2f}")
+        
+        # 当前帧面积>=阈值 才告警
+        if current_area >= area_threshold:
+            self._alerted = True
+            return True, f"阳性{positive_count}帧, 当前帧面积:{current_area}px²"
+        
+        return False, f"当前帧面积不足 ({current_area}/{area_threshold})"
+    
+    def reset_alert(self):
+        """重置告警状态，允许再次告警"""
+        self._alerted = False
+    
+    def clear(self):
+        """清空历史"""
+        self.frames = []
+        self._alerted = False
+
+
 def main():
     """
     主函数：初始化各模块并进入监控循环
@@ -63,6 +184,17 @@ def main():
     # 6. 初始化邮件回复处理器（用于远程控制）
     email_reply_handler = EmailReplyHandler()
     print("邮件回复监听已启动")
+
+    # 7. 初始化多帧检测历史
+    multi_frame_enabled = config.get_bool('multi_frame.enabled', True)
+    detection_history = DetectionHistory() if multi_frame_enabled else None
+    
+    # 多帧检测配置
+    required_frames = config.get_int('multi_frame.required_frames', 5)
+    spaghetti_area_threshold = config.get_float('multi_frame.area_threshold', 900)
+    
+    if multi_frame_enabled:
+        print(f"多帧检测已启用: 阳性帧数>={required_frames}时验证面积, 面积阈值:{spaghetti_area_threshold}px²")
 
     # ───────────── 监控循环阶段 ─────────────
     
@@ -118,9 +250,8 @@ def main():
                 should_alert = False     # 是否需要发送告警
                 alert_details = []       # 告警详情
 
-                # 读取告警阈值配置
-                alert_conf_threshold = config.get_float('model.alert_conf_threshold', 0.70)
-                spaghetti_area_threshold = config.get_float('model.spaghetti_area_threshold', 5000)
+                # 读取告警阈值配置（从多帧检测配置中读取）
+                alert_conf_threshold = config.get_float('multi_frame.alert_conf_threshold', 0.8)
 
                 # 分类处理检测到的目标
                 other_faults = []        # 非spaghetti的其他故障
@@ -139,42 +270,59 @@ def main():
                         other_faults.append(f"{cls_name}: {conf:.2f}")
 
                 # ───────────── 处理 spaghetti 检测结果 ─────────────
+                # 先添加到历史记录（无论是否达到单帧阈值）
+                current_has_spaghetti = False
+                spaghetti_total_area = 0
+                max_conf = 0
+                
                 if spaghetti_boxes:
                     img_height, img_width = results.orig_img.shape[:2]
                     
                     # 计算spaghetti区域并集面积
-                    # 优化：单框时直接计算，多框时使用mask计算并集
                     if len(spaghetti_boxes) == 1:
-                        # 单个检测框，直接计算面积
                         x1, y1, x2, y2 = spaghetti_boxes[0][1]
                         spaghetti_total_area = max(0, min(x2, img_width) - max(0, x1)) * \
                                                max(0, min(y2, img_height) - max(0, y1))
                     else:
-                        # 多个检测框，使用mask计算并集（处理重叠情况）
                         mask = np.zeros((img_height, img_width), dtype=np.uint8)
                         for conf, xyxy in spaghetti_boxes:
                             x1, y1, x2, y2 = xyxy
-                            # 边界检查，防止框超出图片范围
                             x1, x2 = max(0, min(x1, img_width)), max(0, min(x2, img_width))
                             y1, y2 = max(0, min(y1, img_height)), max(0, min(y2, img_height))
                             mask[y1:y2, x1:x2] = 1
                         spaghetti_total_area = int(np.sum(mask))
                     
-                    print(f"[调试] 炒面框数量: {len(spaghetti_boxes)}, 并集总面积: {spaghetti_total_area}")
-                    
-                    # 获取最高置信度
                     max_conf = max(conf for conf, _ in spaghetti_boxes)
-                    
-                    # 记录检测信息
+                    print(f"[调试] 炒面框数量: {len(spaghetti_boxes)}, 并集总面积: {spaghetti_total_area}")
                     detected_info.append(f"spaghetti (最大置信度:{max_conf:.2f}, 总面积:{spaghetti_total_area})")
                     
-                    # 判断是否触发告警（同时满足置信度和面积阈值）
+                    # 达到单帧阈值才标记为阳性帧
                     if max_conf >= alert_conf_threshold and spaghetti_total_area >= spaghetti_area_threshold:
+                        current_has_spaghetti = True
+                    else:
+                        print(f"  -> 炒面未达到单帧告警条件(置信度:{max_conf:.2f}/{alert_conf_threshold}, "
+                              f"总面积:{spaghetti_total_area}/{spaghetti_area_threshold})")
+
+                # ───────────── 添加到多帧历史 ─────────────
+                if detection_history:
+                    detection_history.add_frame(current_has_spaghetti, spaghetti_boxes, max_conf, spaghetti_total_area)
+                    
+                    # 多帧检测：连续N帧阳性 + 第N帧面积验证
+                    should_alert, alert_detail = detection_history.check_multi_frame_alert(
+                        required_frames=required_frames,
+                        area_threshold=spaghetti_area_threshold
+                    )
+                    
+                    if should_alert:
+                        alert_details.append(f"炒面 ({alert_detail})")
+                    else:
+                        if alert_detail:
+                            print(f"  -> {alert_detail}")
+                else:
+                    # 未启用多帧，使用原来的单帧判断
+                    if current_has_spaghetti:
                         should_alert = True
                         alert_details.append(f"炒面 (置信度:{max_conf:.2f}, 总面积:{spaghetti_total_area}px²)")
-                    else:
-                        print(f"  -> 炒面未达到告警条件(置信度:{max_conf:.2f}/{alert_conf_threshold}, "
-                              f"总面积:{spaghetti_total_area}/{spaghetti_area_threshold})")
 
                 # 打印检测结果摘要
                 if detected_info:
@@ -225,6 +373,11 @@ def main():
                         from_email=config.get_str('email.from', ''),
                         password=config.get_str('email.password', '')
                     )
+                    
+                    # 发邮件后清零检测历史，避免重复告警
+                    if detection_history:
+                        detection_history.clear()
+                        print("[多帧] 已发送告警，历史已清零")
 
                 last_time = now
 
