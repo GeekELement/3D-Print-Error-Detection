@@ -17,56 +17,6 @@ from config import config
 from device import CudaUtils
 
 
-def compute_iou(box1, box2):
-    """计算两个边界框的IoU（交并比）"""
-    x1_1, y1_1, x2_1, y2_1 = box1
-    x1_2, y1_2, x2_2, y2_2 = box2
-    
-    # 计算交集区域
-    x1_i = max(x1_1, x1_2)
-    y1_i = max(y1_1, y1_2)
-    x2_i = min(x2_1, x2_2)
-    y2_i = min(y2_1, y2_2)
-    
-    if x2_i <= x1_i or y2_i <= y1_i:
-        return 0.0
-    
-    intersection = (x2_i - x1_i) * (y2_i - y1_i)
-    
-    # 计算各自的面积
-    area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
-    area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
-    
-    union = area1 + area2 - intersection
-    return intersection / union if union > 0 else 0.0
-
-
-def compute_box_intersection_area(boxes):
-    """计算多个边界框的交集面积"""
-    if not boxes:
-        return 0
-    
-    if len(boxes) == 1:
-        x1, y1, x2, y2 = boxes[0]
-        return max(0, x2 - x1) * max(0, y2 - y1)
-    
-    # 从第一个框开始，逐步计算与后续框的交集
-    result_box = list(boxes[0])
-    
-    for box in boxes[1:]:
-        x1_i = max(result_box[0], box[0])
-        y1_i = max(result_box[1], box[1])
-        x2_i = min(result_box[2], box[2])
-        y2_i = min(result_box[3], box[3])
-        
-        if x2_i <= x1_i or y2_i <= y1_i:
-            return 0  # 无交集
-        
-        result_box = [x1_i, y1_i, x2_i, y2_i]
-    
-    return max(0, result_box[2] - result_box[0]) * max(0, result_box[3] - result_box[1])
-
-
 class DetectionHistory:
     """多帧检测历史"""
     
@@ -115,8 +65,6 @@ class DetectionHistory:
         current_frame = self.frames[-1]
         current_area = current_frame['area']
         current_conf = current_frame['conf']
-        
-        avg_conf = np.mean([f['conf'] for f in self.frames if f['spaghetti']][:required_frames])
         
         print(f"  -> 多帧检查: 阳性{positive_count}帧, "
               f"当前帧面积:{current_area}px², 置信度:{current_conf:.2f}")
