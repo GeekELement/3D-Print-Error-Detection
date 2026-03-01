@@ -61,11 +61,6 @@ class Camera:
             self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
         os.makedirs(self.captured_dir, exist_ok=True)
         
-        self.predicted_dir = config.get_str('predicted_dir_abs', '')
-        if not self.predicted_dir:
-            self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
-        os.makedirs(self.predicted_dir, exist_ok=True)
-        
         # 启动时清空图片目录
         self._cleanup_all_images()
         
