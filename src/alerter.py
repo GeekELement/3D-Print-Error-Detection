@@ -513,11 +513,13 @@ class EmailReplyHandler:
         if not body:
             return None
         
+        import re
+        
         body_lower = body.lower().strip()
         
-        if '0' in body_lower:
+        if re.search(r'\b0\b', body_lower):
             return '0'
-        elif '1' in body_lower:
+        elif re.search(r'\b1\b', body_lower):
             return '1'
         
         return None
@@ -618,7 +620,10 @@ class EmailReplyHandler:
                                     body = payload
                             
                             # 提取指令并执行
-                            command = self._parse_reply_content(body)
+                            body_str = str(body) if body else ""
+                            command = self._parse_reply_content(body_str)
+                            print(f"[DEBUG] 邮件正文: {body_str[:200]}...")
+                            print(f"[DEBUG] 解析结果: command={command}")
                             if command == '0':
                                 self._handle_stop()
                             elif command == '1':
