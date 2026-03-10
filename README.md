@@ -1,8 +1,8 @@
 # 3D打印缺陷视觉监控系统
 
-[![Python](https://img.shields.io/badge/Python-3.7%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.6%2B-green)](https://opencv.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-1.7%2B-red)](https://pytorch.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.5%2B-red)](https://pytorch.org/)
 [![YOLOv8](https://img.shields.io/badge/YOLO-v8-orange)](https://github.com/ultralytics/yolov8)
 
 ## 项目简介
@@ -36,8 +36,8 @@
 
 - 硬件：带摄像头的上位机（调试可用视频文件）
 - 操作系统: Ubuntu / Debian / Windows
-- Python: 3.7 或更高版本
-- GPU: 可选（支持CUDA加速）
+- Python: 3.10 或更高版本
+- GPU/NPU: 可选（支持CUDA加速）
 
 ### 安装与部署
 
