@@ -499,6 +499,29 @@ class EmailReplyHandler:
         elif printer_type == 'none':
             print("未配置打印机控制")
 
+    def _parse_reply_content(self, body) -> str:
+        """
+        解析邮件回复内容，提取指令
+        
+        支持的指令：
+        - "0": 停止打印
+        - "1": 继续打印
+        
+        Returns:
+            str: 提取的指令，未找到返回None
+        """
+        if not body:
+            return None
+        
+        body_lower = body.lower().strip()
+        
+        if '0' in body_lower:
+            return '0'
+        elif '1' in body_lower:
+            return '1'
+        
+        return None
+    
     def _handle_continue(self):
         """
         处理继续打印指令
