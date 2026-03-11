@@ -12,9 +12,74 @@ import numpy as np
 from datetime import datetime
 from ultralytics import YOLO
 from camera import Camera, cleanup_old_images
-from alerter import send_email, EmailReplyHandler
+from alerter import send_email
 from config import config
 from device import CudaUtils
+import threading
+import bambulabs_api as bl
+
+
+def start_web_app():
+    """在后台线程中启动 web 应用"""
+    import web_app as web_module
+    print("Web 应用已启动，访问 http://localhost:5000 查看监控面板")
+    
+    # 使用socketio的background task来自动连接（在socketio上下文内）
+    web_module.socketio.start_background_task(auto_connect_and_notify)
+    
+    web_module.socketio.run(web_module.app, host='0.0.0.0', port=5000, debug=False, log_output=False)
+
+def auto_connect_and_notify():
+    """自动连接并通知前端"""
+    import web_app as web_module
+    import time
+    import bambulabs_api as bl
+    
+    source = config.get_str('camera.source', 'local')
+    if source != 'webapp':
+        return
+    
+    host = config.get_str('printer.host', '')
+    access_code = config.get_str('printer.access_code', '')
+    serial_number = config.get_str('printer.serial_number', '')
+    
+    if not host:
+        return
+    
+    time.sleep(2)  # 等待网页先连接
+    
+    print(f"自动连接到 {host}...")
+    web_module.socketio.emit('log', {'message': f'Auto connecting to {host}...'})
+    
+    web_module.printer = bl.Printer(host, access_code, serial_number)
+    web_module.printer.connect()
+    web_module.socketio.emit('log', {'message': 'TCP Connected'})
+    web_module.printer.mqtt_start()
+    
+    for i in range(10):
+        time.sleep(1)
+        if web_module.printer.mqtt_client_connected():
+            break
+    
+    if not web_module.printer.mqtt_client_connected():
+        web_module.socketio.emit('log', {'message': 'MQTT failed'})
+        return
+    
+    web_module.socketio.emit('log', {'message': 'MQTT connected'})
+    web_module.running = True
+    web_module.camera_running = True
+    web_module.socketio.start_background_task(web_module.status_loop)
+    
+    try:
+        web_module.printer.camera_start()
+        web_module.socketio.start_background_task(web_module.camera_loop)
+        web_module.socketio.emit('log', {'message': 'Camera started'})
+    except Exception as e:
+        web_module.socketio.emit('log', {'message': f'Camera error: {e}'})
+    
+    # 发送connected事件，启用前端control按钮
+    web_module.socketio.emit('connected', {'status': True})
+    print("自动连接成功")
 
 
 class DetectionHistory:
@@ -113,11 +178,43 @@ def main():
     cuda_utils = CudaUtils(config)
     cuda_utils.print_info()
 
-    # 4. 初始化摄像头
-    print("初始化摄像头...")
-    camera = Camera(camera_index=config.get_int('camera.index', 0))
+    # 4. 启动 Web 应用（后台线程）
+    web_thread = threading.Thread(target=start_web_app, daemon=True)
+    web_thread.start()
+    time.sleep(1)
 
-    # 5. 加载YOLOv8模型
+    # 5. 初始化摄像头
+    print("初始化摄像头...")
+    camera_source = config.get_str('camera.source', 'local')
+    
+    if camera_source == 'webapp':
+        # 等待webapp连接打印机
+        print("等待WebApp自动连接打印机...")
+        import web_app as web_module
+        time.sleep(3)  # 等待webapp启动连接
+        
+        # 等待webapp连接打印机和相机
+        max_wait = 30
+        for i in range(max_wait):
+            if web_module.is_printer_connected() and web_module.is_camera_ready():
+                print("WebApp相机已就绪")
+                break
+            time.sleep(1)
+            if i % 5 == 0:
+                print(f"  等待中... ({i}/{max_wait})")
+        else:
+            print("错误：WebApp相机未就绪，请确保已在网页端连接打印机")
+            return
+        
+        # 等待相机获取到画面
+        time.sleep(2)
+        
+        # 使用webapp模式从webapp获取图像
+        camera = Camera(source='webapp')
+    else:
+        camera = Camera(camera_index=config.get_int('camera.index', 0))
+
+    # 6. 加载YOLOv8模型
     print("加载 YOLOv8 模型...")
     try:
         model = YOLO(config.get_str('model_path_abs', ''))
@@ -129,11 +226,7 @@ def main():
         print(f"模型加载失败：{e}")
         return
 
-    # 6. 初始化邮件回复处理器（用于远程控制）
-    email_reply_handler = EmailReplyHandler()
-    print("邮件回复监听已启动")
-
-    # 7. 初始化多帧检测历史
+    # 6. 初始化多帧检测历史
     multi_frame_enabled = config.get_bool('multi_frame.enabled', True)
     detection_history = DetectionHistory() if multi_frame_enabled else None
     
@@ -155,26 +248,12 @@ def main():
     
     # 状态变量
     last_time = time.time()           # 上次检测时间
-    last_email_check = time.time()    # 上次检查邮件时间
 
     try:
         while True:
             now = time.time()
             
-            # 1. 定期检查邮件回复（用户可能通过邮件控制打印机）
-            email_check_interval = config.get_int('email.imap.check_interval', 10)
-            if now - last_email_check >= email_check_interval:
-                email_reply_handler.check_replies()
-                last_email_check = now
-            
-            # 2. 如果用户回复"继续打印"，跳过本次检测
-            skip_remaining = email_reply_handler.get_skip_remaining_time()
-            if skip_remaining > 0:
-                print(f"跳过检测，剩余 {skip_remaining} 秒")
-                time.sleep(min(5, skip_remaining))
-                continue
-            
-            # 3. 达到检测间隔，开始新一轮检测
+            # 达到检测间隔，开始新一轮检测
             if now - last_time >= interval_sec:
                 ts_human = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"\n[{ts_human}] 开始新一轮检测...")
@@ -299,13 +378,14 @@ def main():
 
                 # ───────────── 检测步骤 4: 发送告警邮件 ─────────────
                 if should_alert and config.get_bool('email.enabled'):
-                    # 构造告警邮件内容
+                    web_url = config.get_str('app.web_url', 'http://localhost:5000')
                     other_faults_info = f"其他故障：{', '.join(other_faults)}" if other_faults else "无"
                     body = (
                         "【3D打印异常警报】\n\n"
                         f"检测时间：{ts_human}\n"
                         f"炒面告警：{', '.join(alert_details)}\n"
                         f"{other_faults_info}\n\n"
+                        f"查看监控画面：{web_url}\n"
                         "请尽快检查打印机状态。\n"
                         "预测图片已作为附件发送。"
                     )
