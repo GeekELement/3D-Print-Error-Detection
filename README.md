@@ -7,14 +7,15 @@
 
 ## 项目简介
 
-本项目是一个部署在3D打印机上位机上的智能监控系统。它利用 **YOLOv8** 深度学习模型，周期性地对打印过程进行视觉检测。一旦识别到打印缺陷，系统会自动发送告警邮件（包含检测图片附件），提醒用户及时检查。
+本项目是一个部署在3D打印机上位机上的智能监控系统。它利用 **YOLOv8** 深度学习模型，周期性地对打印过程进行视觉检测。一旦识别到打印缺陷，系统会自动发送告警邮件（包含检测图片附件和Web监控链接），提醒用户及时检查。
 
 ## 核心功能
 
 - **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认3秒/次，可配置）
 - **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷
-- **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件
-- **📩 邮件控制**：支持通过邮件回复远程控制打印机（停止/继续打印）
+- **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件，包含Web监控链接
+- **📷 双相机支持**：支持本机USB摄像头和Bambu Lab A1打印机相机
+- **🌐 Web监控界面**：实时查看打印机状态和相机画面
 - **🔧 多固件支持**：支持 Klipper、OctoPrint、Bambu Lab 打印机控制
 - **💾 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
 - **⚙️ YAML配置**：使用YAML文件统一管理所有配置参数
@@ -35,9 +36,9 @@
 ### 环境要求
 
 - 硬件：带摄像头的上位机（调试可用视频文件）
-- 操作系统: Ubuntu / Debian / Windows
+- 操作系统: Linux / Windows
 - Python: 3.10 或更高版本
-- GPU/NPU: 可选（支持CUDA加速）
+- GPU/NPU: 可选（目前只支持CUDA加速）
 
 ### 安装与部署
 
@@ -77,7 +78,8 @@
     ├── main.py                   # 主程序入口
     ├── config.py                 # YAML配置加载
     ├── camera.py                 # 摄像头操作 + 图片清理
-    ├── alerter.py                # 邮件告警 + 邮件回复 + 打印机控制
+    ├── alerter.py                # 邮件告警 + 打印机控制
+    ├── web_app.py                # Web监控界面 (Flask + SocketIO)
     └── device.py                 # 设备管理（GPU/CPU）
 ```
 
@@ -95,6 +97,7 @@
 
 ### 3. 摄像头模块 (`camera.py`)
 - 基于OpenCV的摄像头/视频操作
+- 支持本机USB摄像头和Bambu Lab A1打印机相机
 - 支持预热和分辨率配置
 - 启动时自动清空图片目录
 - 支持调试模式视频测试
@@ -102,17 +105,19 @@
 
 ### 4. 报警模块 (`alerter.py`)
 - `send_email`: SMTP邮件发送，支持附件
-- `EmailReplyHandler`: 监听IMAP邮箱，识别告警邮件回复
-- `KlipperClient`: 通过Moonraker API控制Klipper打印机
-- `OcttoPrintClien`: 通过API控制OctoPrint打印机
-- `BambuClient`: 通过MQTT控制Bambu Lab打印机
 
-### 5. 主程序 (`main.py`)
+### 5. Web监控模块 (`web_app.py`)
+- 实时显示打印机状态（温度、进度、层数等）
+- 实时显示A1相机画面
+- 连接/断开打印机控制
+
+### 6. 主程序 (`main.py`)
 - YOLOv8模型加载和推理
 - 实时检测和结果分析
 - 阈值判断和告警决策
 - 炒面(spaghetti)面积并集计算
 - **多帧检测**（借鉴Bambu Lab拓竹炒面检测原理）
+- 支持自动连接A1打印机
 
 ## 多帧检测算法（借鉴Bambu Lab）
 
@@ -184,6 +189,7 @@ monitoring:
 ### 摄像头配置
 ```yaml
 camera:
+  source: local                   # 相机来源: local=本机摄像头, a1=A1打印机相机
   index: 0                   # 摄像头索引 (0=默认摄像头)
   width: 640                 # 分辨率宽度
   height: 480                # 分辨率高度
@@ -211,65 +217,20 @@ email:
     server: "smtp.qq.com"   # SMTP服务器
     port: 465               # SMTP端口
     use_ssl: true           # 是否使用SSL
-  imap:
-    server: "imap.qq.com"   # IMAP服务器（用于接收回复）
-    check_interval: 10      # 检查间隔（秒）
 ```
-
-### 邮件回复配置
-```yaml
-email_reply:
-  enabled: false             # 是否启用邮件回复处理
-  subject_prefix: "【3D打印异常警报】"  # 告警邮件主题标识
-  skip_duration_min: 10     # 回复后跳过检测时长（分钟）
-```
-
-### 打印机配置
-```yaml
-printer:
-  type: "none"              # 打印机类型: klipper, octoprint, bambu, none
-
-  klipper:
-    url: "http://192.168.1.100:7125"  # Moonraker服务器地址
-    api_key: ""             # API密钥
-
-  octoprint:
-    url: "http://192.168.1.100:5000"  # OctoPrint服务器地址
-    api_key: ""             # API密钥
-
-  bambu:
-    host: "192.168.1.100"   # 打印机IP地址
-    mqtt_port: 8883         # MQTT端口 (8883=SSL, 1883=非SSL)
-    access_code: ""         # 访问代码
-    serial_number: ""       # 打印机序列号
-```
-
-### 程序设置
-```yaml
-app:
-  name: "3D打印异常检测系统"
-  log_level: "INFO"         # 日志级别: DEBUG, INFO, WARNING, ERROR
-```
-
-## 邮件回复控制
-
-用户收到告警邮件后，可回复以下指令控制打印机：
-- **回复 0**：立即停止打印
-- **回复 1**：继续打印，指定分钟内不检测
-
-回复邮件主题需包含"Re:"或"回复"。
 
 ## 注意事项
 
 - 使用前请准备训练好的YOLOv8模型（`best.pt`或`yolov8n.pt`）
 - 确保摄像头权限已配置
 - 邮件发送需要SMTP授权码（非登录密码）
-- 邮件回复需要开启IMAP服务
 - YAML配置文件使用空格缩进，不支持Tab
 - 打印机控制需先配置对应固件
 - Bambu Lab 需要在打印机上启用MQTT并获取 access_code 和 serial_number
 - 程序支持Ctrl+C优雅退出
 - 视频调试模式：每 `frame_interval` 帧保存一张图片，用于快速测试
+- A1相机模式：配置 `camera.source: a1` 并确保打印机网络可达
+- Web监控：访问 http://localhost:5000 实时查看打印机状态和相机画面
 
 ## 联系
 

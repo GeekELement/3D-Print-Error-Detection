@@ -8,6 +8,7 @@
 """
 
 import cv2
+import numpy as np
 import os
 from datetime import datetime
 import time
@@ -23,37 +24,108 @@ class Camera:
         camera = Camera(camera_index=0)
         image_path = camera.capture_and_save(prefix="print")
         camera.release()
+    
+    A1打印机相机用法：
+        from bambulabs_api import Printer
+        printer = Printer(host, access_code, serial_number)
+        printer.connect()
+        printer.camera_start()
+        camera = Camera(source='a1', printer=printer)
     """
     
-    def __init__(self, camera_index: int = None):
+    def __init__(self, camera_index: int = None, source: str = None, printer=None):
         """
         初始化摄像头
         
         Args:
             camera_index: 摄像头索引，默认为配置中的值
+            source: 相机来源，默认为配置中的值 (local/a1)
+            printer: A1打印机对象，当source='a1'时需要传入
         """
-        # 摄像头索引：优先使用传入值，否则读取配置
-        self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
-        self.cap = None  # VideoCapture对象
+        # 视频路径：优先检查，有值则使用视频模式
+        test_video_path = config.get_str('debug.video_path', '')
         
-        # 检查是否使用测试视频
-        test_video_path = config.get_str('debug.video_path', '') or config.get_str('camera.test_video_path', '')
+        # 相机来源：优先使用传入值，否则读取配置
+        self.source = source if source else config.get_str('camera.source', 'local')
         
+        # 如果有视频路径，优先使用视频模式
         if test_video_path:
             from pathlib import Path
             base_dir = Path(__file__).parent.parent
             video_abs_path = str(base_dir / test_video_path)
-            
             if os.path.exists(video_abs_path):
+                self.source = 'video'
                 self.video_path = video_abs_path
-                self.is_video_mode = True
-            else:
-                print(f"视频文件不存在：{video_abs_path}，使用摄像头")
-                self.video_path = None
-                self.is_video_mode = False
-        else:
+        
+        self.printer = printer  # A1打印机对象
+        
+        # 视频模式
+        if self.source == 'video':
+            self.is_video_mode = True
+            self.is_a1_mode = False
+            self.captured_dir = config.get_str('captured_dir_abs', '')
+            if not self.captured_dir:
+                self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
+            os.makedirs(self.captured_dir, exist_ok=True)
+            
+            self.predicted_dir = config.get_str('predicted_dir_abs', '')
+            if not self.predicted_dir:
+                self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
+            os.makedirs(self.predicted_dir, exist_ok=True)
+            
+            self._cleanup_all_images()
+            self.frame_interval = config.get_int('debug.frame_interval', 1)
+            self.last_saved_frame_pos = -self.frame_interval
+            self.cap = None  # 初始化cap属性
+            self._open_camera()
+            return
+        
+        # 摄像头索引：仅当source=local时使用
+        self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
+        self.cap = None  # VideoCapture对象
+        
+        # A1相机模式不需要OpenCV
+        if self.source == 'a1':
+            self.is_a1_mode = True
+            self.cap = None  # A1模式不使用OpenCV
             self.video_path = None
             self.is_video_mode = False
+            self.captured_dir = config.get_str('captured_dir_abs', '')
+            if not self.captured_dir:
+                self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
+            os.makedirs(self.captured_dir, exist_ok=True)
+            
+            self.predicted_dir = config.get_str('predicted_dir_abs', '')
+            if not self.predicted_dir:
+                self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
+            os.makedirs(self.predicted_dir, exist_ok=True)
+            
+            self._cleanup_all_images()
+            self.frame_interval = config.get_int('debug.frame_interval', 1)
+            self.last_saved_frame_pos = -self.frame_interval
+            return
+        
+        # WebApp模式：从webapp获取图像
+        if self.source == 'webapp':
+            self.is_webapp_mode = True
+            self.is_a1_mode = False
+            self.cap = None
+            self.video_path = None
+            self.is_video_mode = False
+            self.captured_dir = config.get_str('captured_dir_abs', '')
+            if not self.captured_dir:
+                self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
+            os.makedirs(self.captured_dir, exist_ok=True)
+            
+            self.predicted_dir = config.get_str('predicted_dir_abs', '')
+            if not self.predicted_dir:
+                self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
+            os.makedirs(self.predicted_dir, exist_ok=True)
+            
+            self._cleanup_all_images()
+            return
+        
+        self.is_a1_mode = False
         
         # 图片保存目录
         self.captured_dir = config.get_str('captured_dir_abs', '')
@@ -118,6 +190,94 @@ class Camera:
                     self.cap.read()
                     time.sleep(0.05)
 
+    def _capture_from_a1(self, prefix: str, cleanup: bool) -> Optional[str]:
+        """
+        从A1打印机获取相机帧并保存
+        """
+        import numpy as np
+        
+        if not self.printer:
+            raise RuntimeError("A1模式需要传入printer对象")
+        
+        if not self.printer.camera_client_alive():
+            raise RuntimeError("A1相机未连接")
+        
+        # 获取A1相机帧
+        frame = self.printer.get_camera_frame()
+        if frame is None:
+            raise RuntimeError("无法获取A1相机画面")
+        
+        # 处理可能的字符串数据（base64编码）
+        if isinstance(frame, str):
+            import base64
+            frame = base64.b64decode(frame)
+        
+        # 视频模式：帧间隔控制
+        if self.is_video_mode and self.frame_interval > 1:
+            target_pos = self.last_saved_frame_pos + self.frame_interval
+            self.last_saved_frame_pos = target_pos
+            print(f"A1视频模式，跳到第 {target_pos} 帧")
+        
+        # 生成文件名
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{prefix}_{ts}.jpg"
+        save_path = os.path.join(self.captured_dir, filename)
+        
+        # 保存图片 (A1返回的是字节数据，需要转换为numpy数组再保存)
+        nparr = np.frombuffer(frame, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if not cv2.imwrite(save_path, img):
+            raise RuntimeError(f"保存图片失败：{save_path}")
+        
+        print(f"已保存A1相机画面：{save_path}")
+        
+        # 可选：清理旧图片
+        if cleanup:
+            max_captured = config.get_int('camera.max_captured', 1)
+            if max_captured != 0:
+                cleanup_old_images(self.captured_dir, max_captured)
+        
+        return save_path
+
+    def _capture_from_webapp(self, prefix: str, cleanup: bool) -> Optional[str]:
+        """
+        从WebApp队列获取相机帧并保存
+        """
+        import web_app as webapp_module
+        
+        if not webapp_module.is_camera_ready():
+            raise RuntimeError("WebApp相机未就绪，请先在网页端连接打印机")
+        
+        frame = webapp_module.get_latest_frame(timeout=5)
+        if frame is None:
+            raise RuntimeError("无法获取WebApp相机画面")
+        
+        if isinstance(frame, str):
+            import base64
+            img = base64.b64decode(frame)
+            import numpy as np
+            img = np.frombuffer(img, np.uint8)
+            img = cv2.imdecode(img, cv2.IMREAD_COLOR)
+        else:
+            img = frame
+        
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{prefix}_{ts}.jpg"
+        save_path = os.path.join(self.captured_dir, filename)
+        
+        if not cv2.imwrite(save_path, img):
+            raise RuntimeError(f"保存图片失败：{save_path}")
+        
+        print(f"已保存WebApp相机画面：{save_path}")
+        
+        if cleanup:
+            max_captured = config.get_int('camera.max_captured', 1)
+            if max_captured != 0:
+                cleanup_old_images(self.captured_dir, max_captured)
+        
+        return save_path
+
     def capture_and_save(self, prefix: str = "print", cleanup: bool = False) -> Optional[str]:
         """
         拍摄一张图片并保存
@@ -127,11 +287,19 @@ class Camera:
             cleanup: 是否在拍摄后清理旧图片，默认为False
             
         Returns:
-            tuple: (图片路径, 是否需要识别)
+            str: 保存的图片路径
             
         Raises:
             RuntimeError: 读取画面失败或保存失败时抛出
         """
+        # A1打印机相机模式
+        if self.is_a1_mode:
+            return self._capture_from_a1(prefix, cleanup)
+        
+        # WebApp模式：从webapp队列获取图像
+        if getattr(self, 'is_webapp_mode', False):
+            return self._capture_from_webapp(prefix, cleanup)
+        
         # 确保视频/摄像头已打开
         self._open_camera()
         

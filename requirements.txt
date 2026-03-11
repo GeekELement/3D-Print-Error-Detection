@@ -6,3 +6,9 @@ requests==2.32.5
 PyYAML==6.0.3
 numpy==2.2.6
 pillow==12.1.1
+flask==3.1.0
+flask-socketio==5.4.1
+python-socketio==5.12.1
+python-engineio==4.11.1
+bambulabs-api==1.7.4
+paho-mqtt==2.0.0
