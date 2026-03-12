@@ -126,6 +126,7 @@ class Camera:
             return
         
         self.is_a1_mode = False
+        self.is_video_mode = False
         
         # 图片保存目录
         self.captured_dir = config.get_str('captured_dir_abs', '')
@@ -150,6 +151,8 @@ class Camera:
     
     def _cleanup_all_images(self):
         for directory in [self.captured_dir, self.predicted_dir]:
+            if not os.path.exists(directory):
+                continue
             for f in os.listdir(directory):
                 if f.lower().endswith(('.jpg', '.png', '.jpeg')):
                     try:
@@ -244,7 +247,7 @@ class Camera:
         """
         从WebApp队列获取相机帧并保存
         """
-        import web_app as webapp_module
+        import webui as webapp_module
         
         if not webapp_module.is_camera_ready():
             raise RuntimeError("WebApp相机未就绪，请先在网页端连接打印机")

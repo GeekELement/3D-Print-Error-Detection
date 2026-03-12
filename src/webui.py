@@ -39,12 +39,17 @@ def status_loop():
                         "FAILED": "Failed",
                         "RUNNING": "Printing"
                     }
+                    try:
+                        gcode_file = printer.gcode_file()
+                    except:
+                        gcode_file = ps.get("gcode_file", "No file")
+                    
                     socketio.emit('status', {
                         'state': state_map.get(state.upper(), state),
                         'progress': ps.get("mc_percent", 0),
                         'layer': ps.get("layer_num", 0),
                         'total_layer': ps.get("total_layer_num", 0),
-                        'file': ps.get("gcode_file", "No file"),
+                        'file': gcode_file,
                         'nozzle': ps.get("nozzle_temper", 0),
                         'nozzle_target': ps.get("nozzle_target_temper", 0),
                         'bed': ps.get("bed_temper", 0),
@@ -78,7 +83,7 @@ def camera_loop():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('webui.html')
 
 @socketio.on('connect')
 def handle_connect():
