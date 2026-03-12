@@ -174,6 +174,19 @@ def handle_stop():
     except Exception as e:
         emit('log', {'message': f'Error: {e}'})
 
+@socketio.on('led')
+def handle_led(data):
+    try:
+        if data.get('state'):
+            printer.turn_light_on()
+            emit('log', {'message': 'LED turned on'})
+        else:
+            printer.turn_light_off()
+            emit('log', {'message': 'LED turned off'})
+        emit('led_status', {'on': data.get('state', False)})
+    except Exception as e:
+        emit('log', {'message': f'LED control error: {e}'})
+
 def get_latest_frame(timeout=5):
     try:
         return frame_queue.get(timeout=timeout)
