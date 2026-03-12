@@ -105,10 +105,10 @@ class Camera:
             self.last_saved_frame_pos = -self.frame_interval
             return
         
-        # WebApp模式：从webapp获取图像
-        if self.source == 'webapp':
+        # WebApp/A1模式：从webapp获取图像
+        if self.source in ('webapp', 'a1'):
             self.is_webapp_mode = True
-            self.is_a1_mode = False
+            self.is_a1_mode = (self.source == 'a1')
             self.cap = None
             self.video_path = None
             self.is_video_mode = False

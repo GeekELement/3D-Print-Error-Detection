@@ -36,7 +36,7 @@ def auto_connect_and_notify():
     import bambulabs_api as bl
     
     source = config.get_str('camera.source', 'local')
-    if source != 'webapp':
+    if source not in ('webapp', 'a1'):
         return
     
     host = config.get_str('printer.host', '')
@@ -187,7 +187,7 @@ def main():
     print("初始化摄像头...")
     camera_source = config.get_str('camera.source', 'local')
     
-    if camera_source == 'webapp':
+    if camera_source in ('webapp', 'a1'):
         # 等待webapp连接打印机
         print("等待WebApp自动连接打印机...")
         import webui as web_module
