@@ -21,7 +21,7 @@ import bambulabs_api as bl
 
 def start_web_app():
     """在后台线程中启动 web 应用"""
-    import web_app as web_module
+    import webui as web_module
     print("Web 应用已启动，访问 http://localhost:5000 查看监控面板")
     
     # 使用socketio的background task来自动连接（在socketio上下文内）
@@ -31,7 +31,7 @@ def start_web_app():
 
 def auto_connect_and_notify():
     """自动连接并通知前端"""
-    import web_app as web_module
+    import webui as web_module
     import time
     import bambulabs_api as bl
     
@@ -190,7 +190,7 @@ def main():
     if camera_source == 'webapp':
         # 等待webapp连接打印机
         print("等待WebApp自动连接打印机...")
-        import web_app as web_module
+        import webui as web_module
         time.sleep(3)  # 等待webapp启动连接
         
         # 等待webapp连接打印机和相机
@@ -263,7 +263,6 @@ def main():
                 
                 # 跳过未保存的图片（视频模式帧间隔控制）
                 if image_path is None:
-                    last_time = now
                     continue
 
                 # ───────────── 检测步骤 2: YOLO 推理 ─────────────
@@ -373,7 +372,6 @@ def main():
                         cleanup_old_images(predicted_dir, max_predicted)
                 else:
                     print("预测图保存失败，跳过本轮")
-                    last_time = now
                     continue
 
                 # ───────────── 检测步骤 4: 发送告警邮件 ─────────────
@@ -407,10 +405,13 @@ def main():
                         detection_history.clear()
                         print("[多帧] 已发送告警，历史已清零")
 
-                last_time = now
-
-            # 空闲时短暂休眠，避免CPU空转
-            time.sleep(5)
+                # 更新上次检测时间（使用检测完成后的时间）
+                last_time = time.time()
+                
+                # 空闲时短暂休眠，避免CPU空转
+                sleep_time = max(0, interval_sec - (time.time() - last_time))
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
 
     except KeyboardInterrupt:
         print("\n用户中断，程序退出")

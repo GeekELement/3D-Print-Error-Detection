@@ -1,11 +1,10 @@
 """
 报警模块
 
-功能：邮件告警、邮件回复处理、多种固件打印机控制
+功能：邮件告警、多种固件打印机控制
 
 包含：
 - send_email: 发送告警邮件（支持附件）
-- EmailReplyHandler: 监听邮件回复，实现远程控制
 - KlipperClient: 通过Moonraker API控制Klipper打印机
 - OctoPrintClient: 通过API控制OctoPrint打印机
 - BambuClient: 通过MQTT控制Bambu Lab打印机
@@ -13,9 +12,6 @@
 
 import smtplib
 import os
-import imaplib
-import email
-import time
 import json
 import requests
 import paho.mqtt.client as mqtt
@@ -24,7 +20,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
-from email.header import decode_header
 from config import config
 
 
@@ -52,7 +47,7 @@ def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: 
         to_email = config.get_str('email.to', '')
     if not smtp_server:
         smtp_server = config.get_str('email.smtp.server', 'smtp.qq.com')
-    if not smtp_port:
+    if smtp_port is None:
         smtp_port = config.get_int('email.smtp.port', 465)
     if not from_email:
         from_email = config.get_str('email.from', '')
@@ -410,244 +405,3 @@ class BambuClient:
         return None
 
 
-class EmailReplyHandler:
-    """
-    邮件回复处理器
-    
-    功能：监听IMAP邮箱，识别告警邮件的回复，根据指令控制打印机
-    
-    支持的指令：
-    - 回复 "0": 立即停止打印
-    - 回复 "1": 继续打印，指定时间内跳过检测
-    
-    使用示例：
-        handler = EmailReplyHandler()
-        handler.check_replies()  # 定期调用检查新邮件
-        skip_time = handler.get_skip_remaining_time()  # 获取剩余跳过时间
-    """
-    
-    def __init__(self):
-        """
-        初始化邮件回复处理器
-        
-        配置项：
-        - email_reply.enabled: 是否启用
-        - email.from: 邮箱账号
-        - email.password: 邮箱授权码
-        - email.imap.server: IMAP服务器
-        - email.imap.check_interval: 检查间隔
-        - email_reply.skip_duration_min: 跳过检测时长（分钟）
-"""
-        self.enabled = config.get_bool('email_reply.enabled', False)
-        self.email_account = config.get_str('email.from', '')
-        self.password = config.get_str('email.password', '')
-        self.imap_server = config.get_str('email.imap.server', 'imap.qq.com')
-        self.check_interval = config.get_int('email.imap.check_interval', 10)
-        self.skip_duration_min = config.get_int('email_reply.skip_duration_min', 10)
-
-        # 状态变量
-        self.last_check_time = datetime.now()  # 上次检查时间
-        self.skip_detection_until = None       # 跳过检测的截止时间
-
-    def _handle_stop(self):
-        """
-        处理停止打印指令
-        
-        当收到指令 "0" 时，根据配置调用对应固件的API停止打印
-        支持：Klipper、OctoPrint、Bambu Lab
-        """
-        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 收到停止打印指令 (0)")
-        
-        printer_type = config.get_str('printer.type', 'none')
-        
-        # Klipper
-        if printer_type == 'klipper':
-            try:
-                client = KlipperClient()
-                result = client.stop_print()
-                if result is not None:
-                    print("已向Klipper发送停止打印指令")
-                else:
-                    print("Klipper停止打印指令发送失败")
-            except Exception as e:
-                print(f"Klipper停止打印失败：{e}")
-        
-        # OctoPrint
-        elif printer_type == 'octoprint':
-            try:
-                client = OctoPrintClient()
-                result = client.stop_print()
-                if result is not None:
-                    print("已向OctoPrint发送停止打印指令")
-                else:
-                    print("OctoPrint停止打印指令发送失败")
-            except Exception as e:
-                print(f"OctoPrint停止打印失败：{e}")
-        
-        # Bambu Lab
-        elif printer_type == 'bambu':
-            try:
-                client = BambuClient()
-                result = client.stop_print()
-                if result:
-                    print("已向Bambu Lab发送停止打印指令")
-                else:
-                    print("Bambu Lab停止打印指令发送失败")
-            except Exception as e:
-                print(f"Bambu Lab停止打印失败：{e}")
-        
-        elif printer_type == 'none':
-            print("未配置打印机控制")
-
-    def _parse_reply_content(self, body) -> str:
-        """
-        解析邮件回复内容，提取指令
-        
-        支持的指令：
-        - "0": 停止打印
-        - "1": 继续打印
-        
-        Returns:
-            str: 提取的指令，未找到返回None
-        """
-        if not body:
-            return None
-        
-        import re
-        
-        body_lower = body.lower().strip()
-        
-        if re.search(r'\b0\b', body_lower):
-            return '0'
-        elif re.search(r'\b1\b', body_lower):
-            return '1'
-        
-        return None
-    
-    def _handle_continue(self):
-        """
-        处理继续打印指令
-        
-        当收到指令 "1" 时，设置跳过检测的截止时间
-        """
-        print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] 收到继续打印指令 (1)，{self.skip_duration_min}分钟内不检测")
-        # 设置跳过检测的截止时间（当前时间 + 跳过时长）
-        self.skip_detection_until = time.time() + self.skip_duration_min * 60
-
-    def _connect(self):
-        """
-        连接到IMAP服务器
-        
-        Returns:
-            IMAP4对象，连接失败返回None
-        """
-        try:
-            mail = imaplib.IMAP4_SSL(self.imap_server)
-            mail.login(self.email_account, self.password)
-            return mail
-        except Exception as e:
-            print(f"连接邮件服务器失败：{e}")
-            return None
-
-    def check_replies(self):
-        """
-        检查邮箱收件箱，处理告警邮件的回复
-        
-        工作流程：
-        1. 连接到IMAP服务器
-        2. 搜索上次检查后的未读邮件
-        3. 识别回复邮件（主题含"Re:"或"回复"）
-        4. 解析邮件内容，提取指令
-        5. 执行相应操作
-        6. 标记邮件为已读
-        """
-        if not self.enabled:
-            return
-        
-        current_time = datetime.now()
-        mail = self._connect()
-        if not mail:
-            return
-        
-        try:
-            # 选择收件箱
-            mail.select("inbox")
-            # 搜索上次检查后的未读邮件
-            search_since = self.last_check_time.strftime("%d-%b-%Y")
-            status, messages = mail.search(None, f'SINCE {search_since} UNSEEN')
-            
-            if status != "OK" or not messages[0]:
-                self.last_check_time = current_time
-                mail.close()
-                return
-            
-            # 逐封处理邮件
-            for msg_id in messages[0].split():
-                res, msg = mail.fetch(msg_id, "(RFC822)")
-                if res != "OK":
-                    continue
-                
-                for response in msg:
-                    if isinstance(response, tuple):
-                        msg_content = response[1]
-                        msg = email.message_from_bytes(msg_content)
-                        
-                        # 解析邮件主题
-                        subject, encoding = decode_header(msg["Subject"])[0]
-                        if isinstance(subject, bytes):
-                            subject = subject.decode(encoding if encoding else "utf-8")
-                        
-                        # 判断是否为回复邮件（主题以Re:开头或包含"回复"）
-                        is_reply = subject.lower().startswith('re:') or '回复' in subject
-                        if is_reply:
-                            # 解析邮件正文
-                            body = ""
-                            if msg.is_multipart():
-                                # 多部分邮件，查找text/plain部分
-                                for part in msg.walk():
-                                    if part.get_content_type() == "text/plain":
-                                        payload = part.get_payload(decode=True)
-                                        if isinstance(payload, bytes):
-                                            body = payload.decode(part.get_content_charset() or "utf-8", errors="replace")
-                                        else:
-                                            body = payload
-                                        break
-                            else:
-                                payload = msg.get_payload(decode=True)
-                                if isinstance(payload, bytes):
-                                    body = payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
-                                else:
-                                    body = payload
-                            
-                            # 提取指令并执行
-                            body_str = str(body) if body else ""
-                            command = self._parse_reply_content(body_str)
-                            print(f"[DEBUG] 邮件正文: {body_str[:200]}...")
-                            print(f"[DEBUG] 解析结果: command={command}")
-                            if command == '0':
-                                self._handle_stop()
-                            elif command == '1':
-                                self._handle_continue()
-                
-                # 标记邮件为已读
-                mail.store(msg_id, '+FLAGS', '\\Seen')
-            
-            self.last_check_time = current_time
-        
-        except Exception as e:
-            print(f"检查邮件失败：{e}")
-        finally:
-            mail.logout()
-
-    def get_skip_remaining_time(self):
-        """
-        获取剩余跳过检测时间
-        
-        Returns:
-            int: 剩余秒数，0表示不在跳过状态
-        """
-        if self.skip_detection_until:
-            remaining = self.skip_detection_until - time.time()
-            if remaining > 0:
-                return int(remaining)
-        return 0
