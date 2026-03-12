@@ -14,22 +14,24 @@
 - **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认3秒/次，可配置）
 - **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷
 - **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件，包含Web监控链接
-- **📷 双相机支持**：支持本机USB摄像头和Bambu Lab A1打印机相机
-- **🌐 Web监控界面**：实时查看打印机状态和相机画面
-- **🔧 多固件支持**：支持 Klipper、OctoPrint、Bambu Lab 打印机控制
+- **📷 多相机支持**：支持本机USB摄像头、Bambu Lab A1打印机相机、WebApp模式、视频文件
+- **🌐 Web监控界面**：实时查看打印机状态、温度、进度、层数等，并可远程控制打印
+- **🔧 Bambu Lab支持**：支持 Bambu Lab 打印机控制
 - **💾 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
 - **⚙️ YAML配置**：使用YAML文件统一管理所有配置参数
 - **🐛 调试模式**：支持视频文件测试，可控制取帧间隔
+- **📡 MQTT支持**：通过MQTT协议连接Bambu Lab打印机
 
 ## 技术栈
 
-- **编程语言**: Python 3.7+
-- **深度学习框架**: PyTorch, YOLOv8 (ultralytics)
-- **计算机视觉库**: OpenCV
+- **编程语言**: Python 3.10+
+- **深度学习框架**: PyTorch 2.5+, YOLOv8 (ultralytics)
+- **计算机视觉库**: OpenCV 4.6+
+- **Web框架**: Flask 3.x, Flask-SocketIO
+- **物联网协议**: MQTT (paho-mqtt)
+- **打印机API**: bambulabs-api
 - **配置管理**: PyYAML
 - **HTTP客户端**: requests
-- **MQTT客户端**: paho-mqtt (Bambu Lab)
-- **邮件协议**: SMTP, IMAP
 
 ## 快速开始
 
@@ -67,10 +69,12 @@
 ```
 3D_Print_Error_Detection/
 ├── README.md                     # 项目说明文档
+├── README_en.md                  # 英文说明文档
 ├── requirements.txt              # Python依赖包列表
 ├── config.yaml                   # 配置文件
 ├── config.yaml.example           # 配置文件模板
 ├── best.pt                       # 训练好的YOLOv8模型权重
+├── best.onnx                     # ONNX格式模型权重（可选）
 ├── images/                       # 图片存储目录
 │   ├── captured/                 # 原始拍摄图片
 │   └── predicted/                # 带标注的预测图片
@@ -78,9 +82,10 @@
     ├── main.py                   # 主程序入口
     ├── config.py                 # YAML配置加载
     ├── camera.py                 # 摄像头操作 + 图片清理
-    ├── alerter.py                # 邮件告警 + 打印机控制
-    ├── web_app.py                # Web监控界面 (Flask + SocketIO)
-    └── device.py                 # 设备管理（GPU/CPU）
+    ├── alerter.py                # 邮件告警 + 打印机控制客户端
+    ├── device.py                 # 设备管理（GPU/CPU）
+    ├── webui.py                  # Web监控界面 (Flask + SocketIO)
+    └── webui.html                # Web监控前端页面
 ```
 
 ## 核心模块
@@ -89,27 +94,30 @@
 - 使用YAML格式配置文件
 - 支持路径自动计算（相对路径/绝对路径）
 - 配置验证和目录创建
+- 提供类型安全的配置读取接口
 
 ### 2. 设备管理 (`device.py`)
-- 自动检测GPU可用性
+- 自动检测GPU/CUDA可用性
 - YOLO模型自动选择GPU/CPU
 - 提供设备信息查询
 
 ### 3. 摄像头模块 (`camera.py`)
 - 基于OpenCV的摄像头/视频操作
-- 支持本机USB摄像头和Bambu Lab A1打印机相机
+- 支持多种相机模式：local(USB摄像头)、a1(A1打印机相机)、webapp(WebApp获取)、video(视频文件)
 - 支持预热和分辨率配置
 - 启动时自动清空图片目录
-- 支持调试模式视频测试
 - 视频模式支持帧间隔控制
 
 ### 4. 报警模块 (`alerter.py`)
 - `send_email`: SMTP邮件发送，支持附件
+- `BambuClient`: Bambu Lab MQTT客户端
 
-### 5. Web监控模块 (`web_app.py`)
-- 实时显示打印机状态（温度、进度、层数等）
-- 实时显示A1相机画面
+### 5. Web监控模块 (`webui.py` + `webui.html`)
+- 实时显示打印机状态（温度、进度、层数、文件等）
+- 实时显示A1相机画面（MJPEG流）
 - 连接/断开打印机控制
+- 远程控制：暂停、恢复、停止打印
+- SocketIO实时通信
 
 ### 6. 主程序 (`main.py`)
 - YOLOv8模型加载和推理
@@ -117,7 +125,7 @@
 - 阈值判断和告警决策
 - 炒面(spaghetti)面积并集计算
 - **多帧检测**（借鉴Bambu Lab拓竹炒面检测原理）
-- 支持自动连接A1打印机
+- 支持多种相机模式自动切换
 
 ## 多帧检测算法（借鉴Bambu Lab）
 
@@ -169,6 +177,7 @@ debug:
 model:
   path: "best.pt"            # YOLO 模型文件路径
   conf_threshold: 0.5         # 检测置信度阈值 (0.0-1.0)，低于此值不检测
+  use_cuda: true              # 是否使用CUDA加速（默认true）
 ```
 
 ### 多帧检测配置
@@ -189,7 +198,7 @@ monitoring:
 ### 摄像头配置
 ```yaml
 camera:
-  source: local                   # 相机来源: local=本机摄像头, a1=A1打印机相机
+  source: webapp                   # 相机来源: local=本机摄像头, a1=A1打印机相机, webapp=WebApp模式
   index: 0                   # 摄像头索引 (0=默认摄像头)
   width: 640                 # 分辨率宽度
   height: 480                # 分辨率高度
@@ -219,6 +228,20 @@ email:
     use_ssl: true           # 是否使用SSL
 ```
 
+### Bambu Lab 打印机配置
+```yaml
+printer:
+  host: "192.168.1.100"     # 打印机IP地址
+  access_code: "xxxxxx"       # 访问代码（打印机设置中获取）
+  serial_number: "xxxxxxxx"   # 打印机序列号
+```
+
+### 程序设置
+```yaml
+app:
+  web_url: "http://localhost:5000"  # Web监控页面地址（用于邮件告警）
+```
+
 ## 注意事项
 
 - 使用前请准备训练好的YOLOv8模型（`best.pt`或`yolov8n.pt`）
@@ -230,7 +253,10 @@ email:
 - 程序支持Ctrl+C优雅退出
 - 视频调试模式：每 `frame_interval` 帧保存一张图片，用于快速测试
 - A1相机模式：配置 `camera.source: a1` 并确保打印机网络可达
+- WebApp模式：配置 `camera.source: webapp`，程序启动后需在网页端连接打印机
 - Web监控：访问 http://localhost:5000 实时查看打印机状态和相机画面
+- 多帧检测：可有效减少误报，需要持续检测到异常才告警
+- 模型支持导出为ONNX格式以获得更好的推理性能
 
 ## 联系
 
