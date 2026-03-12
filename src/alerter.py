@@ -1,19 +1,16 @@
 """
 报警模块
 
-功能：邮件告警、多种固件打印机控制
+功能：邮件告警、Bambu Lab打印机控制
 
 包含：
 - send_email: 发送告警邮件（支持附件）
-- KlipperClient: 通过Moonraker API控制Klipper打印机
-- OctoPrintClient: 通过API控制OctoPrint打印机
 - BambuClient: 通过MQTT控制Bambu Lab打印机
 """
 
 import smtplib
 import os
 import json
-import requests
 import paho.mqtt.client as mqtt
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -42,7 +39,6 @@ def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: 
     Returns:
         bool: 发送成功返回True，失败返回False
     """
-    # 参数为空时从配置读取默认值
     if not to_email:
         to_email = config.get_str('email.to', '')
     if not smtp_server:
@@ -54,20 +50,17 @@ def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: 
     if not password:
         password = config.get_str('email.password', '')
 
-    # 检查必要配置
     if config.get_bool('email.enabled') and (not from_email or not password):
         print("错误：邮件账号或授权码未配置")
         return False
 
     try:
-        # 构造邮件
         msg = MIMEMultipart()
         msg["From"] = from_email
         msg["To"] = to_email
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain", "utf-8"))
 
-        # 添加附件（如果有）
         if attachment_path and os.path.exists(attachment_path):
             with open(attachment_path, "rb") as f:
                 part = MIMEBase("application", "octet-stream")
@@ -76,7 +69,6 @@ def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: 
                 part.add_header("Content-Disposition", f'attachment; filename="{os.path.basename(attachment_path)}"')
                 msg.attach(part)
 
-        # 发送邮件（SMTP_SSL用于SSL连接）
         with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
             server.login(from_email, password)
             server.send_message(msg)
@@ -87,199 +79,6 @@ def send_email(to_email: str = "", subject: str = "3D打印异常警报", body: 
     except Exception as e:
         print(f"发送邮件失败：{e}")
         return False
-
-
-class KlipperClient:
-    """
-    Klipper Moonraker API 客户端
-    
-    通过HTTP请求控制Klipper打印机
-    
-    使用示例：
-        client = KlipperClient()
-        client.stop_print()  # 停止打印
-        client.pause_print()  # 暂停打印
-    """
-    
-    def __init__(self, klipper_url: str = "", api_key: str = ""):
-        """
-        初始化Klipper客户端
-        
-        Args:
-            klipper_url: Moonraker服务器地址，如 http://192.168.1.100:7125
-            api_key: API密钥（可选）
-            
-        Raises:
-            ValueError: 未配置klipper_url时抛出
-        """
-        self.klipper_url = klipper_url if klipper_url else config.get_str('klipper.url', '')
-        self.api_key = api_key if api_key else config.get_str('klipper.api_key', '')
-        
-        if not self.klipper_url:
-            raise ValueError("Klipper URL 必须配置")
-        
-        # HTTP请求头
-        self.headers = {'Content-Type': 'application/json'}
-        if self.api_key:
-            self.headers['X-API-Key'] = self.api_key
-
-    def _request(self, method: str, endpoint: str, data: dict = None):
-        """
-        发送HTTP请求到Moonraker API
-        
-        Args:
-            method: HTTP方法，GET或POST
-            endpoint: API端点路径
-            data: 请求数据（POST时使用）
-            
-        Returns:
-            dict: 响应JSON，失败返回None
-        """
-        url = f"{self.klipper_url}{endpoint}"
-        try:
-            if method.upper() == "POST":
-                response = requests.post(url, headers=self.headers, json=data, timeout=10)
-            else:
-                response = requests.get(url, headers=self.headers, timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Klipper API 请求失败：{e}")
-            return None
-
-    def stop_print(self):
-        """
-        停止当前打印任务
-        
-        Returns:
-            dict: API响应，失败返回None
-        """
-        return self._request("POST", "/api/job/cancel")
-
-    def pause_print(self):
-        """
-        暂停打印
-        
-        Returns:
-            dict: API响应，失败返回None
-        """
-        return self._request("POST", "/api/job/pause")
-
-    def resume_print(self):
-        """
-        恢复打印
-        
-        Returns:
-            dict: API响应，失败返回None
-        """
-        return self._request("POST", "/api/job/resume")
-
-    def get_job_status(self):
-        """
-        获取打印任务状态
-        
-        Returns:
-            dict: 任务状态信息，失败返回None
-        """
-        return self._request("GET", "/api/job")
-
-
-class OctoPrintClient:
-    """
-    OctoPrint API 客户端
-    
-    通过HTTP请求控制OctoPrint打印机
-    
-    使用示例：
-        client = OctoPrintClient()
-        client.stop_print()  # 停止打印
-        client.pause_print()  # 暂停打印
-    """
-    
-    def __init__(self, octoprint_url: str = "", api_key: str = ""):
-        """
-        初始化OctoPrint客户端
-        
-        Args:
-            octoprint_url: OctoPrint服务器地址，如 http://192.168.1.100:5000
-            api_key: API密钥
-            
-        Raises:
-            ValueError: 未配置octoprint_url时抛出
-        """
-        self.octoprint_url = octoprint_url if octoprint_url else config.get_str('octoprint.url', '')
-        self.api_key = api_key if api_key else config.get_str('octoprint.api_key', '')
-        
-        if not self.octoprint_url:
-            raise ValueError("OctoPrint URL 必须配置")
-        
-        # 移除末尾斜杠
-        self.octoprint_url = self.octoprint_url.rstrip('/')
-        
-        # HTTP请求头
-        self.headers = {'Content-Type': 'application/json'}
-        if self.api_key:
-            self.headers['X-API-Key'] = self.api_key
-
-    def _request(self, method: str, endpoint: str, data: dict = None):
-        """
-        发送HTTP请求到OctoPrint API
-        
-        Args:
-            method: HTTP方法，GET或POST
-            endpoint: API端点路径
-            data: 请求数据（POST时使用）
-            
-        Returns:
-            dict: 响应JSON，失败返回None
-        """
-        url = f"{self.octoprint_url}/api{endpoint}"
-        try:
-            if method.upper() == "POST":
-                response = requests.post(url, headers=self.headers, json=data, timeout=10)
-            else:
-                response = requests.get(url, headers=self.headers, timeout=10)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"OctoPrint API 请求失败：{e}")
-            return None
-
-    def stop_print(self):
-        """
-        停止当前打印任务
-        
-        Returns:
-            dict: API响应，失败返回None
-        """
-        return self._request("POST", "/job", {"command": "cancel"})
-
-    def pause_print(self):
-        """
-        暂停打印
-        
-        Returns:
-            dict: API响应，失败返回None
-        """
-        return self._request("POST", "/job", {"command": "pause"})
-
-    def resume_print(self):
-        """
-        恢复打印
-        
-        Returns:
-            dict: API响应，失败返回None
-        """
-        return self._request("POST", "/job", {"command": "resume"})
-
-    def get_job_status(self):
-        """
-        获取打印任务状态
-        
-        Returns:
-            dict: 任务状态信息，失败返回None
-        """
-        return self._request("GET", "/job")
 
 
 class BambuClient:
@@ -313,7 +112,6 @@ class BambuClient:
         if not self.bambu_host:
             raise ValueError("Bambu 主机地址必须配置")
         
-        # MQTT配置
         self.mqtt_port = config.get_int('bambu.mqtt_port', 8883)
         self.request_topic = f"device/{self.serial_number}/request"
         
@@ -403,5 +201,3 @@ class BambuClient:
             None: 暂不支持直接获取状态
         """
         return None
-
-
