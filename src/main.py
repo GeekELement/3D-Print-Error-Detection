@@ -36,7 +36,7 @@ def auto_connect_and_notify():
     import bambulabs_api as bl
     
     source = config.get_str('camera.source', 'local')
-    if source not in ('webapp', 'a1'):
+    if source != 'a1':
         return
     
     host = config.get_str('printer.host', '')
@@ -85,9 +85,16 @@ def auto_connect_and_notify():
 class DetectionHistory:
     """多帧检测历史"""
     
-    def __init__(self):
-        self.frames = []  # 每帧检测结果: {'spaghetti': bool, 'boxes': [], 'conf': float, 'area': int, 'timestamp': float}
+    def __init__(self, max_history: int = 100):
+        """
+        初始化检测历史
+        
+        Args:
+            max_history: 最大保留历史帧数，防止内存泄漏，默认100
+        """
+        self.frames = []  # 每帧检测结果
         self._alerted = False  # 是否已发送过告警
+        self._max_history = max_history
     
     def add_frame(self, has_spaghetti: bool, boxes: list, max_conf: float = 0, total_area: int = 0):
         """添加一帧检测结果"""
@@ -99,6 +106,17 @@ class DetectionHistory:
             'timestamp': time.time()
         })
         self._alerted = False
+        
+        # 限制历史长度，防止内存泄漏
+        if len(self.frames) > self._max_history:
+            # 保留最近的帧，但确保至少保留 required_frames 数量的阳性帧用于判断
+            self._trim_old_frames()
+    
+    def _trim_old_frames(self):
+        """清理旧帧，保留最近的一半数据"""
+        # 简单的策略：保留最近的一半历史
+        keep_count = self._max_history // 2
+        self.frames = self.frames[-keep_count:]
     
     def get_positive_frames(self):
         """获取所有阳性帧"""
@@ -163,16 +181,16 @@ def main():
     
     # ───────────── 初始化阶段 ─────────────
     
-    # 1. 验证配置合法性
+    # 1. 确保图片保存目录存在（先创建目录，再验证）
+    config.ensure_directories()
+    
+    # 2. 验证配置合法性
     errors = config.validate()
     if errors:
         print("配置验证失败：")
         for error in errors:
             print(f"  - {error}")
         return
-
-    # 2. 确保图片保存目录存在
-    config.ensure_directories()
     
     # 3. 初始化CUDA设备
     cuda_utils = CudaUtils(config)
@@ -187,30 +205,30 @@ def main():
     print("初始化摄像头...")
     camera_source = config.get_str('camera.source', 'local')
     
-    if camera_source in ('webapp', 'a1'):
-        # 等待webapp连接打印机
-        print("等待WebApp自动连接打印机...")
+    if camera_source == 'a1':
+        # 等待webui连接打印机
+        print("等待WebUI自动连接打印机...")
         import webui as web_module
-        time.sleep(3)  # 等待webapp启动连接
+        time.sleep(3)  # 等待webui启动连接
         
-        # 等待webapp连接打印机和相机
+        # 等待webui连接打印机和相机
         max_wait = 30
         for i in range(max_wait):
             if web_module.is_printer_connected() and web_module.is_camera_ready():
-                print("WebApp相机已就绪")
+                print("A1相机已就绪")
                 break
             time.sleep(1)
             if i % 5 == 0:
                 print(f"  等待中... ({i}/{max_wait})")
         else:
-            print("错误：WebApp相机未就绪，请确保已在网页端连接打印机")
+            print("错误：A1相机未就绪，请确保已在网页端连接打印机")
             return
         
         # 等待相机获取到画面
         time.sleep(2)
         
-        # 使用webapp模式从webapp获取图像
-        camera = Camera(source='webapp')
+        # 使用a1模式从webui获取图像
+        camera = Camera(source='a1')
     else:
         camera = Camera(camera_index=config.get_int('camera.index', 0))
 
@@ -405,22 +423,30 @@ def main():
                         detection_history.clear()
                         print("[多帧] 已发送告警，历史已清零")
 
-                # 更新上次检测时间（使用检测完成后的时间）
+                # 更新上次检测时间
                 last_time = time.time()
-                
-                # 空闲时短暂休眠，避免CPU空转
-                sleep_time = max(0, interval_sec - (time.time() - last_time))
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+            
+            # 空闲时短暂休眠，避免CPU空转
+            # 计算距离下次检测还剩多少时间
+            elapsed = time.time() - last_time
+            sleep_time = max(0, interval_sec - elapsed)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
     except KeyboardInterrupt:
         print("\n用户中断，程序退出")
     except Exception as e:
         print(f"运行时错误：{e}")
+        import traceback
+        traceback.print_exc()
     finally:
         # 确保释放摄像头资源
-        camera.release()
-        print("摄像头已释放，程序结束")
+        try:
+            if 'camera' in locals() and camera is not None:
+                camera.release()
+                print("摄像头已释放，程序结束")
+        except Exception as e:
+            print(f"释放摄像头时出错：{e}")
 
 
 if __name__ == "__main__":

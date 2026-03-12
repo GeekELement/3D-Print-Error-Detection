@@ -48,7 +48,16 @@ class Camera:
         # 相机来源：优先使用传入值，否则读取配置
         self.source = source if source else config.get_str('camera.source', 'local')
         
-        # 如果有视频路径，优先使用视频模式
+        self.printer = printer  # A1打印机对象
+        
+        # 初始化公共属性
+        self.cap = None
+        self.video_path = None
+        self.is_video_mode = False
+        self.is_a1_mode = False
+        self.is_a1_mode = False
+        
+        # 优先使用 video_path（如果配置了且文件存在）
         if test_video_path:
             from pathlib import Path
             base_dir = Path(__file__).parent.parent
@@ -56,79 +65,36 @@ class Camera:
             if os.path.exists(video_abs_path):
                 self.source = 'video'
                 self.video_path = video_abs_path
-        
-        self.printer = printer  # A1打印机对象
+            else:
+                print(f"警告：视频文件不存在 {video_abs_path}，使用配置的 source={self.source}")
         
         # 视频模式
         if self.source == 'video':
             self.is_video_mode = True
-            self.is_a1_mode = False
-            self.captured_dir = config.get_str('captured_dir_abs', '')
-            if not self.captured_dir:
-                self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
-            os.makedirs(self.captured_dir, exist_ok=True)
-            
-            self.predicted_dir = config.get_str('predicted_dir_abs', '')
-            if not self.predicted_dir:
-                self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
-            os.makedirs(self.predicted_dir, exist_ok=True)
-            
+            self._init_directories()
             self._cleanup_all_images()
             self.frame_interval = config.get_int('debug.frame_interval', 1)
             self.last_saved_frame_pos = -self.frame_interval
-            self.cap = None  # 初始化cap属性
             self._open_camera()
             return
         
-        # 摄像头索引：仅当source=local时使用
-        self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
-        self.cap = None  # VideoCapture对象
-        
-        # A1相机模式不需要OpenCV
+        # A1模式：从webui队列获取图像
         if self.source == 'a1':
             self.is_a1_mode = True
-            self.cap = None  # A1模式不使用OpenCV
-            self.video_path = None
-            self.is_video_mode = False
-            self.captured_dir = config.get_str('captured_dir_abs', '')
-            if not self.captured_dir:
-                self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
-            os.makedirs(self.captured_dir, exist_ok=True)
-            
-            self.predicted_dir = config.get_str('predicted_dir_abs', '')
-            if not self.predicted_dir:
-                self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
-            os.makedirs(self.predicted_dir, exist_ok=True)
-            
-            self._cleanup_all_images()
-            self.frame_interval = config.get_int('debug.frame_interval', 1)
-            self.last_saved_frame_pos = -self.frame_interval
-            return
-        
-        # WebApp/A1模式：从webapp获取图像
-        if self.source in ('webapp', 'a1'):
-            self.is_webapp_mode = True
-            self.is_a1_mode = (self.source == 'a1')
-            self.cap = None
-            self.video_path = None
-            self.is_video_mode = False
-            self.captured_dir = config.get_str('captured_dir_abs', '')
-            if not self.captured_dir:
-                self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
-            os.makedirs(self.captured_dir, exist_ok=True)
-            
-            self.predicted_dir = config.get_str('predicted_dir_abs', '')
-            if not self.predicted_dir:
-                self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
-            os.makedirs(self.predicted_dir, exist_ok=True)
-            
+            self._init_directories()
             self._cleanup_all_images()
             return
         
-        self.is_a1_mode = False
-        self.is_video_mode = False
-        
-        # 图片保存目录
+        # 本地摄像头模式（默认）
+        self.camera_index = camera_index if camera_index is not None else config.get_int('camera.index', 0)
+        self._init_directories()
+        self._cleanup_all_images()
+        self.frame_interval = config.get_int('debug.frame_interval', 1)
+        self.last_saved_frame_pos = -self.frame_interval
+        self._open_camera()
+    
+    def _init_directories(self):
+        """初始化图片保存目录"""
         self.captured_dir = config.get_str('captured_dir_abs', '')
         if not self.captured_dir:
             self.captured_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'captured')
@@ -138,16 +104,6 @@ class Camera:
         if not self.predicted_dir:
             self.predicted_dir = os.path.join(os.path.dirname(__file__), '..', 'images', 'predicted')
         os.makedirs(self.predicted_dir, exist_ok=True)
-        
-        # 启动时清空图片目录
-        self._cleanup_all_images()
-        
-# 视频模式帧间隔控制
-        self.frame_interval = config.get_int('debug.frame_interval', 1)
-        self.last_saved_frame_pos = -self.frame_interval  # 上次保存的帧位置，初始为负值确保第一次取第0帧
-        
-        # 打开视频或摄像头
-        self._open_camera()
     
     def _cleanup_all_images(self):
         for directory in [self.captured_dir, self.predicted_dir]:
@@ -243,18 +199,18 @@ class Camera:
         
         return save_path
 
-    def _capture_from_webapp(self, prefix: str, cleanup: bool) -> Optional[str]:
+    def _capture_from_a1(self, prefix: str, cleanup: bool) -> Optional[str]:
         """
-        从WebApp队列获取相机帧并保存
+        从A1队列获取相机帧并保存
         """
-        import webui as webapp_module
+        import webui as webui_module
         
-        if not webapp_module.is_camera_ready():
-            raise RuntimeError("WebApp相机未就绪，请先在网页端连接打印机")
+        if not webui_module.is_camera_ready():
+            raise RuntimeError("A1相机未就绪，请先在网页端连接打印机")
         
-        frame = webapp_module.get_latest_frame(timeout=5)
+        frame = webui_module.get_latest_frame(timeout=5)
         if frame is None:
-            raise RuntimeError("无法获取WebApp相机画面")
+            raise RuntimeError("无法获取A1相机画面")
         
         if isinstance(frame, str):
             import base64
@@ -272,7 +228,7 @@ class Camera:
         if not cv2.imwrite(save_path, img):
             raise RuntimeError(f"保存图片失败：{save_path}")
         
-        print(f"已保存WebApp相机画面：{save_path}")
+        print(f"已保存A1相机画面：{save_path}")
         
         if cleanup:
             max_captured = config.get_int('camera.max_captured', 1)
@@ -299,9 +255,9 @@ class Camera:
         if self.is_a1_mode:
             return self._capture_from_a1(prefix, cleanup)
         
-        # WebApp模式：从webapp队列获取图像
-        if getattr(self, 'is_webapp_mode', False):
-            return self._capture_from_webapp(prefix, cleanup)
+        # A1模式：从webui队列获取图像
+        if self.is_a1_mode:
+            return self._capture_from_a1(prefix, cleanup)
         
         # 确保视频/摄像头已打开
         self._open_camera()

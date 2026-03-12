@@ -105,14 +105,14 @@ class BambuClient:
         Raises:
             ValueError: 未配置bambu_host时抛出
         """
-        self.bambu_host = bambu_host if bambu_host else config.get_str('bambu.host', '')
-        self.access_code = access_code if access_code else config.get_str('bambu.access_code', '')
-        self.serial_number = serial_number if serial_number else config.get_str('bambu.serial_number', '')
+        self.bambu_host = bambu_host if bambu_host else config.get_str('printer.host', '')
+        self.access_code = access_code if access_code else config.get_str('printer.access_code', '')
+        self.serial_number = serial_number if serial_number else config.get_str('printer.serial_number', '')
         
         if not self.bambu_host:
-            raise ValueError("Bambu 主机地址必须配置")
+            raise ValueError("打印机主机地址必须配置")
         
-        self.mqtt_port = config.get_int('bambu.mqtt_port', 8883)
+        self.mqtt_port = config.get_int('printer.mqtt_port', 8883)
         self.request_topic = f"device/{self.serial_number}/request"
         
         self._client = None
