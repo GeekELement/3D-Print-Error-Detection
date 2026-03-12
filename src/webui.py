@@ -17,6 +17,7 @@ camera_thread = None
 running = False
 camera_running = False
 frame_queue = queue.Queue(maxsize=5)
+led_state = False
 
 def get_shared_printer():
     global printer
@@ -90,6 +91,7 @@ def handle_connect():
     emit('log', {'message': 'Web client connected'})
     if printer and printer.mqtt_client_connected():
         emit('connected', {'status': True})
+    emit('led_status', {'on': led_state})
 
 def wait_for_mqtt():
     for _ in range(10):
@@ -176,14 +178,16 @@ def handle_stop():
 
 @socketio.on('led')
 def handle_led(data):
+    global led_state
     try:
-        if data.get('state'):
+        led_state = data.get('state', False)
+        if led_state:
             printer.turn_light_on()
             emit('log', {'message': 'LED turned on'})
         else:
             printer.turn_light_off()
             emit('log', {'message': 'LED turned off'})
-        emit('led_status', {'on': data.get('state', False)})
+        emit('led_status', {'on': led_state})
     except Exception as e:
         emit('log', {'message': f'LED control error: {e}'})
 
