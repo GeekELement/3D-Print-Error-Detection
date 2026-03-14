@@ -27,7 +27,7 @@ def start_web_app():
     # 使用socketio的background task来自动连接（在socketio上下文内）
     web_module.socketio.start_background_task(auto_connect_and_notify)
     
-    web_module.socketio.run(web_module.app, host='0.0.0.0', port=5000, debug=False, log_output=False，allow_unsafe_werkzeug=True)
+    web_module.socketio.run(web_module.app, host='0.0.0.0', port=5000, debug=False, log_output=False, allow_unsafe_werkzeug=True)
 
 def auto_connect_and_notify():
     """自动连接并通知前端"""
