@@ -14,7 +14,7 @@
 - **⏱️ 定时监控**：按配置间隔自动捕获打印画面并检测（默认3秒/次，可配置）
 - **🔍 缺陷识别**：基于YOLOv8模型，精准检测多种常见3D打印缺陷
 - **📧 邮件告警**：发现高置信度缺陷时，自动发送带图片附件的告警邮件，包含Web监控链接
-- **📷 多相机支持**：支持本机USB摄像头、Bambu Lab A1打印机相机、WebApp模式、视频文件
+- **📷 多相机支持**：支持本机USB摄像头、Bambu Lab A1打印机相机、视频文件
 - **🌐 Web监控界面**：实时查看打印机状态、温度、进度、层数等，并可远程控制打印
 - **🔧 Bambu Lab支持**：支持 Bambu Lab 打印机控制
 - **💾 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
@@ -103,7 +103,7 @@
 
 ### 3. 摄像头模块 (`camera.py`)
 - 基于OpenCV的摄像头/视频操作
-- 支持多种相机模式：local(USB摄像头)、a1(A1打印机相机)、webapp(WebApp获取)、video(视频文件)
+- 支持多种相机模式：local(USB摄像头)、a1(A1打印机相机)、video(视频文件，debug.video_path不为空时自动切换)
 - 支持预热和分辨率配置
 - 启动时自动清空图片目录
 - 视频模式支持帧间隔控制
@@ -198,11 +198,11 @@ monitoring:
 ### 摄像头配置
 ```yaml
 camera:
-  source: webapp                   # 相机来源: local=本机摄像头, a1=A1打印机相机, webapp=WebApp模式
+  source: a1                 # 相机来源: local=本机摄像头, a1=从打印机获取(A1打印机)
   index: 0                   # 摄像头索引 (0=默认摄像头)
   width: 640                 # 分辨率宽度
   height: 480                # 分辨率高度
-  warmup_frames: 8            # 预热帧数 (自动曝光/白平衡稳定)
+  warmup_frames: 8           # 预热帧数 (自动曝光/白平衡稳定)
   max_captured: 1            # captured目录保留最新图片数量，0=保留全部
   max_predicted: 1           # predicted目录保留最新图片数量，0=保留全部
 ```
@@ -239,7 +239,7 @@ printer:
 ### 程序设置
 ```yaml
 app:
-  web_url: "http://localhost:5000"  # Web监控页面地址（用于邮件告警）
+  web_url: "http://localhost:5000"     # Web监控页面地址（用于邮件告警）
 ```
 
 ## 注意事项
@@ -253,7 +253,7 @@ app:
 - 程序支持Ctrl+C优雅退出
 - 视频调试模式：每 `frame_interval` 帧保存一张图片，用于快速测试
 - A1相机模式：配置 `camera.source: a1` 并确保打印机网络可达
-- WebApp模式：配置 `camera.source: webapp`，程序启动后需在网页端连接打印机
+- 视频调试模式：配置 `debug.video_path` 为视频文件路径，程序自动切换为视频模式
 - Web监控：访问 http://localhost:5000 实时查看打印机状态和相机画面
 - 多帧检测：可有效减少误报，需要持续检测到异常才告警
 - 模型支持导出为ONNX格式以获得更好的推理性能

@@ -20,33 +20,33 @@ model:
 # 逻辑：阳性帧数 >= required_frames → 当前帧面积 >= area_threshold → 告警
 multi_frame:
   enabled: true                       # 是否启用多帧检测
-  required_frames: 5                   # 阳性帧数达到此值后验证面积
-  alert_conf_threshold: 0.65          # 置信度阈值 (0.0-1.0)
-  area_threshold: 900                  # 面积阈值 (像素²)
+  required_frames: 5                  # 阳性帧数达到此值后验证面积
+  alert_conf_threshold: 0.65           # 置信度阈值 (0.0-1.0)
+  area_threshold: 900                 # 面积阈值 (像素²)
 
 # ───────────── 监控配置 ─────────────
 monitoring:
-  interval_sec: 3                      # 检测间隔（秒）
+  interval_sec: 3                     # 检测间隔（秒）
 
 # ───────────── 摄像头配置 ─────────────
 camera:
-  source: local                       # 相机来源: local=本机摄像头, a1=A1打印机相机
-  index: 0                             # 摄像头索引 (0=默认摄像头)
-  width: 640                           # 分辨率宽度
-  height: 480                          # 分辨率高度
-  warmup_frames: 8                     # 预热帧数 (自动曝光/白平衡稳定)
-  max_captured: 1                      # captured目录保留最新图片数量
-  max_predicted: 1                     # predicted目录保留最新图片数量
+  source: local                        # 相机来源: local=本机摄像头, a1=从打印机获取(A1打印机), 视频模式自动切换
+  index: 0                            # 摄像头索引 (0=默认摄像头)
+  width: 640                          # 分辨率宽度
+  height: 480                         # 分辨率高度
+  warmup_frames: 8                    # 预热帧数 (自动曝光/白平衡稳定)
+  max_captured: 1                     # captured目录保留最新图片数量
+  max_predicted: 1                    # predicted目录保留最新图片数量
 
 # ───────────── 目录配置 ─────────────
 directories:
   project_root: ".."                   # 项目根目录
   predicted_dir: "images/predicted"    # 预测图片保存目录
-  captured_dir: "images/captured"     # 原始图片保存目录
+  captured_dir: "images/captured"      # 原始图片保存目录
 
 # ───────────── 邮件报警配置 ─────────────
 email:
-  enabled: true                        # 是否启用邮件报警
+  enabled: true                       # 是否启用邮件报警
   to: "your_email@domain.com"         # 接收邮件地址
   from: "your_email@domain.com"       # 发送邮件地址
   password: "xxxx"                    # SMTP授权码/应用密码
@@ -57,10 +57,10 @@ email:
 
 # ───────────── Bambu Lab 打印机配置 ─────────────
 printer:
-  host: "192.168.1.100"              # 打印机IP地址
+  host: "192.168.1.100"               # 打印机IP地址
   access_code: ""                     # 访问代码
-  serial_number: ""                  # 打印机序列号
+  serial_number: ""                   # 打印机序列号
 
 # ───────────── 程序设置 ─────────────
 app:
-  web_url: "http://localhost:5000"    # Web监控页面地址（用于邮件告警）
+  web_url: "http://localhost:5000"     # Web监控页面地址（用于邮件告警）
