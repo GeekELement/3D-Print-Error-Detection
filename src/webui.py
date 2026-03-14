@@ -6,7 +6,6 @@ import queue
 import time
 import bambulabs_api as bl
 from config import config
-import shared
 
 app = Flask(__name__, template_folder=os.path.dirname(__file__))
 app.config['SECRET_KEY'] = 'bambu_secret'
@@ -127,12 +126,10 @@ def handle_connect_printer():
                 camera_running = True
                 camera_thread = socketio.start_background_task(camera_loop)
                 emit('log', {'message': 'Camera started'})
-                shared.connect_status = True
             except Exception as e:
                 emit('log', {'message': f'Camera not available: {e}'})
             
             emit('connected', {'status': True})
-            shared.connected_status = True
         else:
             emit('log', {'message': 'MQTT connection timeout'})
             emit('connected', {'status': False})
@@ -154,7 +151,6 @@ def handle_disconnect_printer():
         printer = None
     emit('log', {'message': 'Disconnected'})
     emit('connected', {'status': False})
-    connected_status = False
 
 @socketio.on('pause')
 def handle_pause():
