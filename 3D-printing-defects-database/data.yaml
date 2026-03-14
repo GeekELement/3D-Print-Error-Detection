@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['spaghetti', 'stringing', 'zits']
+
+roboflow:
+  workspace: hcmut-yxyhm
+  project: 3d-printing-defects-database
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/hcmut-yxyhm/3d-printing-defects/dataset/3
