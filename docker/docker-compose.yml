@@ -1,0 +1,66 @@
+# 3D打印异常检测系统 - Docker Compose 配置 (Linux 版本)
+# 适用于 Linux 服务器部署
+#
+# 使用方法:
+#   docker-compose up -d          # 启动服务
+#   docker-compose down           # 停止服务
+#   docker-compose logs -f        # 查看日志
+#   docker-compose build --no-cache  # 重新构建镜像
+#   docker-compose ps             # 查看运行状态
+
+version: '3.8'
+
+services:
+  print-detector:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: print-detector:latest
+    container_name: print-detector
+    restart: unless-stopped
+    
+    ports:
+      # Linux 服务器端口映射
+      - "0.0.0.0:5000:5000"
+    
+    volumes:
+      # Linux 路径挂载（相对路径）
+      - ../config.yaml:/app/config.yaml:ro
+      - ../images:/app/images
+      - ../models:/app/models:ro
+    
+    environment:
+      # Linux 时区设置
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+    
+    # Linux 资源限制（根据服务器配置调整）
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # 日志配置（Linux 日志管理）
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Linux 网络配置
+networks:
+  default:
+    name: print-detector-network
+    driver: bridge

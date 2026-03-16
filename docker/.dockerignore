@@ -1,0 +1,70 @@
+# Docker 构建忽略文件
+# 这些文件/目录不会被复制到 Docker 镜像中
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 日志和临时文件
+*.log
+logs/
+tmp/
+temp/
+
+# 数据文件（可选，如果数据很大可以不复制到镜像）
+# 注意：这里注释掉，因为可能需要测试数据
+# 3D-printing-defects-database/
+
+# 图片输出目录（运行时生成，不需要复制）
+images/captured/*
+images/predicted/*
+!images/.gitkeep
+
+# Docker 相关文件（防止递归复制）
+docker/
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# 文档
+*.md
+!README.md
+
+# 其他
+*.zip
+*.tar.gz
+*.rar
