@@ -283,8 +283,8 @@ MIT License
 
 - [Ultralytics](https://github.com/ultralytics/ultralytics)
 - [Bambu Lab API](https://github.com/mchrisgm/bambulabs_api)
-- [Roboflow Universe](https://universe.roboflow.com/) - 提供3D打印缺陷数据集
+- [Roboflow Universe](https://universe.roboflow.com/)
 
 ## 联系方式
-
+geekelement@outlook.com
 如有问题或建议，欢迎提交Issue或Pull Request。
