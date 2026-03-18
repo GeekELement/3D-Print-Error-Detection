@@ -316,7 +316,7 @@ def main():
                                 if gcode_state not in ["PRINTING", "RUNNING"]:
                                     print("  -> 打印未进行，跳过检测")
                                     last_time = time.time()
-                                    time.sleep(1)
+                                    time.sleep(60)
                                     continue
                                 print("  -> 打印进行中，开始检测")
                         except Exception as e:
