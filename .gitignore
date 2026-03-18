@@ -2,5 +2,5 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
-config.yaml
+/config.yaml
 /images
