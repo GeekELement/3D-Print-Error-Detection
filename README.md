@@ -103,7 +103,6 @@
 ├── config.yaml                   # 配置文件
 ├── config.yaml.example           # 配置文件模板
 ├── best.pt                       # 训练好的YOLOv8模型权重（ defects 检测专用）
-├── best.onnx                     # ONNX格式模型权重（可选）
 ├── images/                       # 图片存储目录
 │   ├── captured/                 # 原始拍摄图片
 │   └── predicted/                # 带标注的预测图片
