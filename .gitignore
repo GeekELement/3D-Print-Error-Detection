@@ -4,4 +4,3 @@ __pycache__/
 .pytest_cache/
 config.yaml
 images
-3D-printing-defects-database/video
