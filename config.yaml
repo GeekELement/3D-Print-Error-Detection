@@ -8,7 +8,7 @@
 
 # ───────────── 调试模式 ─────────────
 debug:
-  video_path: "C:\\Files\\Projects\\3D_Print_Error_Detection\\3D-printing-defects-database\\video\\test1.mp4"                       # 视频文件路径，留空使用摄像头
+  video_path: "C:\\Files\\Projects\\3D_Print_Error_Detection\\3D-printing-defects-database\\video\\test.mp4"                       # 视频文件路径，留空使用摄像头
   frame_interval: 30                   # 视频模式：每隔多少帧识别一次
 
 # ───────────── 模型配置 ─────────────
