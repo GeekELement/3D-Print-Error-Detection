@@ -3,4 +3,4 @@ __pycache__/
 *.pyo
 .pytest_cache/
 config.yaml
-images
+/images
