@@ -5,3 +5,4 @@ __pycache__/
 config.yaml
 images
 3D-printing-defects-database/video
+.gitignore

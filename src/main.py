@@ -255,6 +255,20 @@ def main():
     if multi_frame_enabled:
         print(f"多帧检测已启用: 阳性帧数>={required_frames}时验证面积, 面积阈值:{spaghetti_area_threshold}px²")
 
+    # 读取 ROI 配置
+    roi_enabled = config.get_bool('camera.roi.enabled', False)
+    roi_box = None
+    if roi_enabled:
+        x1 = config.get_int('camera.roi.x1', 0)
+        y1 = config.get_int('camera.roi.y1', 0)
+        x2 = config.get_int('camera.roi.x2', 0)
+        y2 = config.get_int('camera.roi.y2', 0)
+        if x2 > x1 and y2 > y1:
+            roi_box = (x1, y1, x2, y2)
+            print(f"ROI区域已启用: 左上({x1},{y1}), 右下({x2},{y2})")
+        else:
+            print("ROI配置无效，跳过")
+
     # ───────────── 监控循环阶段 ─────────────
     
 # 读取配置参数
@@ -277,7 +291,9 @@ def main():
                 
                 # ───────────── 检测步骤 0: 检查打印状态 ─────────────
                 # 注意：video 模式是调试模式，优先级最高，不需要检查打印状态
-                if camera_source == 'a1':
+                # 获取实际的相机模式（Camera 内部会判断 video_path 优先级）
+                actual_camera_source = camera.source if hasattr(camera, 'source') else camera_source
+                if actual_camera_source == 'a1':
                     import webui as web_module
                     if web_module.printer and web_module.printer.mqtt_client_connected():
                         try:
@@ -317,8 +333,22 @@ def main():
                 # ───────────── 检测步骤 2: YOLO 推理 ─────────────
                 # 获取检测阈值
                 conf_threshold = config.get_float('model.conf_threshold', 0.25)
-                # 执行推理，返回结果列表，取第一个结果
+                
+                # 执行推理（使用原图，不裁剪）
                 results = model(image_path, conf=conf_threshold, verbose=False)[0]
+                
+                # 如果启用了ROI，过滤检测框，只保留ROI区域内的检测结果
+                if roi_box:
+                    x1, y1, x2, y2 = roi_box
+                    filtered_boxes = []
+                    for box in results.boxes:
+                        xyxy = box.xyxy[0].cpu().numpy()
+                        cx = (xyxy[0] + xyxy[2]) / 2
+                        cy = (xyxy[1] + xyxy[3]) / 2
+                        if x1 <= cx <= x2 and y1 <= cy <= y2:
+                            filtered_boxes.append(box)
+                    results.boxes = filtered_boxes
+                    print(f"ROI过滤: ({x1},{y1}) -> ({x2},{y2}), 保留 {len(filtered_boxes)} 个检测框")
 
                 # 解析检测结果
                 detected_info = []       # 记录本次检测到的目标信息

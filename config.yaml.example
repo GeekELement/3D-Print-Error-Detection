@@ -37,6 +37,12 @@ camera:
   warmup_frames: 8                    # 预热帧数 (自动曝光/白平衡稳定)
   max_captured: 1                     # captured目录保留最新图片数量
   max_predicted: 1                    # predicted目录保留最新图片数量
+  roi:
+    enabled: false                    # 是否启用ROI区域检测（true、false）
+    x1: 100                            # 左上角X坐标
+    y1: 100                            # 左上角Y坐标
+    x2: 540                            # 右下角X坐标
+    y2: 380                            # 右下角Y坐标
 
 # ───────────── 目录配置 ─────────────
 directories:
