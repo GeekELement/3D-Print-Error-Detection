@@ -312,7 +312,8 @@ def main():
                                 state_name = state_map.get(gcode_state, gcode_state)
                                 print(f"\n[{ts_human}] 打印状态: {state_name} ({gcode_state})")
                                 
-                                if gcode_state != "PRINTING":
+                                # PRINTING 和 RUNNING 都表示正在打印
+                                if gcode_state not in ["PRINTING", "RUNNING"]:
                                     print("  -> 打印未进行，跳过检测")
                                     last_time = time.time()
                                     time.sleep(1)
