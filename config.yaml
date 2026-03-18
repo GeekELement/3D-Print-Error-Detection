@@ -1,0 +1,72 @@
+# config.yaml - 3D打印异常检测系统配置文件
+# ============================================================
+# 使用说明：
+# 1. 修改配置后需要重启程序
+# 2. # 开头的为注释行
+# 3. 缩进必须使用空格，不能使用Tab
+# ============================================================
+
+# ───────────── 调试模式 ─────────────
+debug:
+  video_path: "C:\\Files\\Projects\\3D_Print_Error_Detection\\3D-printing-defects-database\\video\\test1.mp4"                       # 视频文件路径，留空使用摄像头
+  frame_interval: 30                   # 视频模式：每隔多少帧识别一次
+
+# ───────────── 模型配置 ─────────────
+model:
+  path: "best.pt"                     # YOLO 模型文件路径
+  conf_threshold: 0.5                 # 检测置信度阈值 (0.0-1.0)
+
+# ───────────── 多帧检测配置 ─────────────
+# 逻辑：阳性帧数 >= required_frames → 当前帧面积 >= area_threshold → 告警
+multi_frame:
+  enabled: true                       # 是否启用多帧检测
+  required_frames: 5                  # 阳性帧数达到此值后验证面积
+  alert_conf_threshold: 0.65           # 置信度阈值 (0.0-1.0)
+  area_threshold: 900                 # 面积阈值 (像素²)
+
+# ───────────── 监控配置 ─────────────
+monitoring:
+  interval_sec: 3                     # 检测间隔（秒）
+
+# ───────────── 摄像头配置 ─────────────
+camera:
+  source: a1                             # 相机来源: local=本机摄像头, a1=从打印机获取(A1打印机), 视频模式自动切换
+  index: 0                            # 摄像头索引 (0=默认摄像头)
+  width: 640                          # 分辨率宽度
+  height: 480                         # 分辨率高度
+  warmup_frames: 8                    # 预热帧数 (自动曝光/白平衡稳定)
+  max_captured: 1                     # captured目录保留最新图片数量
+  max_predicted: 1                    # predicted目录保留最新图片数量
+  roi:
+    enabled: true                   # 是否启用ROI区域检测（true、false）
+    x1: 100                            # 左上角X坐标
+    y1: 100                            # 左上角Y坐标
+    x2: 540                            # 右下角X坐标
+    y2: 380                            # 右下角Y坐标
+
+# ───────────── 目录配置 ─────────────
+directories:
+  project_root: ".."                   # 项目根目录
+  predicted_dir: "images/predicted"    # 预测图片保存目录
+  captured_dir: "images/captured"      # 原始图片保存目录
+
+# ───────────── 邮件报警配置 ─────────────
+email:
+  enabled: true                       # 是否启用邮件报警
+  to: "geekelement@outlook.com"       # 接收邮件地址
+  from: "geekelement@foxmail.com"     # 发送邮件地址
+  password: "uxdrpmvghbffdbbj"         # SMTP授权码/应用密码
+  smtp:
+    server: "smtp.qq.com"             # SMTP服务器
+    port: 465                         # SMTP端口
+    use_ssl: true                     # 是否使用SSL
+
+# ───────────── Bambu Lab 打印机配置 ─────────────
+printer:
+  host: "192.168.9.105"               # 打印机IP地址
+  access_code: "64785446"              # 访问代码
+  serial_number: "03900D613109105"     # 打印机序列号
+
+# ───────────── 程序设置 ─────────────
+app:
+  web_url: "http://192.168.9.102:5000"     # Web监控页面地址（用于邮件告警）
