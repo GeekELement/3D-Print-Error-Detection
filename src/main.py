@@ -274,6 +274,37 @@ def main():
             # 达到检测间隔，开始新一轮检测
             if now - last_time >= interval_sec:
                 ts_human = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # ───────────── 检测步骤 0: 检查打印状态 ─────────────
+                # 注意：video 模式是调试模式，优先级最高，不需要检查打印状态
+                if camera_source == 'a1':
+                    import webui as web_module
+                    if web_module.printer and web_module.printer.mqtt_client_connected():
+                        try:
+                            status = web_module.printer.mqtt_dump()
+                            if "print" in status:
+                                ps = status["print"]
+                                gcode_state = ps.get("gcode_state", "unknown").upper()
+                                state_map = {
+                                    "IDLE": "空闲",
+                                    "PRINTING": "打印中",
+                                    "PAUSED": "已暂停",
+                                    "FINISHED": "已完成",
+                                    "FAILED": "失败",
+                                    "RUNNING": "打印中"
+                                }
+                                state_name = state_map.get(gcode_state, gcode_state)
+                                print(f"\n[{ts_human}] 打印状态: {state_name} ({gcode_state})")
+                                
+                                if gcode_state != "PRINTING":
+                                    print("  -> 打印未进行，跳过检测")
+                                    last_time = time.time()
+                                    time.sleep(1)
+                                    continue
+                                print("  -> 打印进行中，开始检测")
+                        except Exception as e:
+                            print(f"  -> 获取打印状态失败: {e}，继续检测")
+                
                 print(f"\n[{ts_human}] 开始新一轮检测...")
 
                 # ───────────── 检测步骤 1: 拍照 ─────────────
