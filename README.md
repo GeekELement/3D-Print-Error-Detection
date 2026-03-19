@@ -351,6 +351,7 @@ MIT License
 ## 致谢
 
 - [Ultralytics](https://github.com/ultralytics/ultralytics)
+- [Bambu Lab Wiki](https://wiki.bambulab.com/zh/knowledge-sharing/Spaghetti_detection)
 - [Bambu Lab API](https://github.com/mchrisgm/bambulabs_api)
 - [Roboflow Universe](https://universe.roboflow.com/)
 
