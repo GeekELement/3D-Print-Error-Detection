@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.13%2B-green)](https://opencv.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.5%2B-red)](https://pytorch.org/)
-[![YOLO](https://img.shields.io/badge/YOLO-v8-orange)](https://github.com/ultralytics/ultralytics)
+[![YOLO](https://img.shields.io/badge/YOLO-orange)](https://github.com/ultralytics/ultralytics)
 
 ## 项目简介
 
