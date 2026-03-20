@@ -4,7 +4,6 @@
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.13%2B-green)](https://opencv.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.5%2B-red)](https://pytorch.org/)
 [![YOLO](https://img.shields.io/badge/YOLO-orange)](https://github.com/ultralytics/ultralytics)
-
 ## 项目简介
 
 本项目是一个部署在3D打印机上位机上的智能监控系统。它利用 **YOLOv8** 深度学习模型，周期性地对打印过程进行视觉检测。一旦识别到打印缺陷，系统会自动发送告警邮件（包含检测图片附件和Web监控链接），提醒用户及时检查。
