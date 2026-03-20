@@ -1,9 +1,9 @@
 # 3D打印缺陷视觉监控系统
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.6%2B-green)](https://opencv.org/)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.13%2B-green)](https://opencv.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.5%2B-red)](https://pytorch.org/)
-[![YOLOv8](https://img.shields.io/badge/YOLO-v8-orange)](https://github.com/ultralytics/ultralytics)
+[![YOLO](https://img.shields.io/badge/YOLO-v8-orange)](https://github.com/ultralytics/ultralytics)
 
 ## 项目简介
 
