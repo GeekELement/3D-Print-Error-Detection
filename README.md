@@ -17,8 +17,8 @@
 - **🌐 Web监控界面**：实时查看打印机状态、温度、进度、层数等，并可远程控制打印
 - **🔧 Bambu Lab支持**：支持 Bambu Lab 打印机控制和状态监控
 - **🎯 多帧确认机制**：连续多帧检测到缺陷才触发告警，减少误报
-- **� ROI区域检测**：支持设置感兴趣区域，只检测指定范围内的缺陷
-- **� 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
+- **📷 ROI区域检测**：支持设置感兴趣区域，只检测指定范围内的缺陷
+- **💾 本地存储**：自动保存原始拍摄图片和带标注的预测结果图片
 - **⚙️ YAML配置**：使用YAML文件统一管理所有配置参数
 - **🐛 调试模式**：支持视频文件测试，可控制取帧间隔
 - **📡 MQTT支持**：通过MQTT协议连接Bambu Lab打印机
@@ -27,13 +27,13 @@
 ## 技术栈
 
 - **编程语言**: Python 3.10+
-- **深度学习框架**: PyTorch 2.5+, YOLOv8 (ultralytics)
-- **计算机视觉库**: OpenCV 4.6+
-- **Web框架**: Flask 3.x, Flask-SocketIO
-- **物联网协议**: MQTT (paho-mqtt)
-- **打印机API**: bambulabs-api
-- **配置管理**: PyYAML
-- **HTTP客户端**: requests
+- **深度学习框架**: PyTorch 2.5.1+cu121, YOLOv8 (ultralytics 8.4.14)
+- **计算机视觉库**: OpenCV 4.13.0.92
+- **Web框架**: Flask 3.1.3, Flask-SocketIO 5.6.1
+- **物联网协议**: MQTT (paho-mqtt 2.1.0)
+- **打印机API**: bambulabs-api 2.6.6
+- **配置管理**: PyYAML 6.0.3
+- **HTTP客户端**: requests 2.32.5
 - **容器化**: Docker, Docker Compose
 
 ## 快速开始
@@ -71,8 +71,6 @@
 
 #### 方式二：Docker部署（Linux服务器）
 
-> ⚠️ **注意：Docker部署功能尚未经过完整测试，使用时请谨慎。**
-
 1. **上传项目到Linux服务器**
    ```bash
    scp -r 3D_Print_Error_Detection user@server:/opt/
@@ -101,7 +99,6 @@
 ├── requirements.txt              # Python依赖包列表
 ├── config.yaml                   # 配置文件
 ├── config.yaml.example           # 配置文件模板
-├── best.pt                       # 训练好的YOLOv8模型权重（ defects 检测专用）
 ├── images/                       # 图片存储目录
 │   ├── captured/                 # 原始拍摄图片
 │   └── predicted/                # 带标注的预测图片
@@ -109,11 +106,15 @@
 │   ├── train/                    # 训练集
 │   ├── valid/                    # 验证集
 │   ├── test/                     # 测试集
+│   ├── video/                    # 测试视频目录
 │   └── data.yaml                 # 数据集配置文件
-├── yolov8/                       # YOLOv8 预训练模型目录
-│   ├── yolov8n.pt                # YOLOv8n PyTorch 模型
-│   └── yolov8n.onnx              # YOLOv8n ONNX 模型
-├── yolov26/                      # YOLOv2.6 预训练模型目录（预留）
+├── YOLO/                         # YOLO模型目录
+│   ├── best.pt                   # 训练好的YOLOv8模型权重（defects检测专用）
+│   ├── yolov8/                   # YOLOv8 预训练模型目录
+│   │   ├── yolov8n.pt            # YOLOv8n PyTorch 模型
+│   │   └── yolov8n.onnx          # YOLOv8n ONNX 模型
+│   └── yolov26/                  # YOLOv26 预训练模型目录（预留）
+│       └── best.pt               # YOLOv26模型权重
 ├── src/                          # 源代码目录
 │   ├── main.py                   # 主程序入口
 │   ├── config.py                 # YAML配置加载
@@ -183,7 +184,7 @@
 - `data.yaml` - 数据集配置文件
 
 数据集许可证：CC BY 4.0
-来源：https://universe.roboflow.com/hcmut-yxyhm/3d-printing-defects
+来源：https://universe.roboflow.com/hcmut-yxyhm/3d-printing-defects-database
 
 ## 配置文件说明
 
@@ -197,7 +198,7 @@ debug:
 
 # ───────────── 模型配置 ─────────────
 model:
-  path: "best.pt"                     # YOLO 模型文件路径
+  path: "YOLO/best.pt"                # YOLO 模型文件路径（相对于项目根目录）
   conf_threshold: 0.5                 # 检测置信度阈值 (0.0-1.0)
 
 # ───────────── 多帧检测配置 ─────────────
@@ -227,6 +228,12 @@ camera:
     y1: 100                           # 左上角Y坐标
     x2: 540                           # 右下角X坐标
     y2: 380                           # 右下角Y坐标
+
+# ───────────── 目录配置 ─────────────
+directories:
+  project_root: ".."                   # 项目根目录
+  predicted_dir: "images/predicted"    # 预测图片保存目录
+  captured_dir: "images/captured"      # 原始图片保存目录
 
 # ───────────── 邮件报警配置 ─────────────
 email:
@@ -261,7 +268,7 @@ python src/main.py
 ```
 
 启动后会自动：
-1. 加载YOLOv8模型
+1. 加载YOLO模型
 2. 启动Web服务（端口5000）
 3. 根据配置自动连接打印机（A1模式）
 4. 开始定时检测循环
@@ -297,12 +304,12 @@ Web界面功能：
 ## 注意事项
 
 1. **首次运行**：系统会自动创建必要的目录结构
-2. **模型文件**：确保 `best.pt` 存在于项目根目录或配置的路径
+2. **模型文件**：确保 `YOLO/best.pt` 存在于项目根目录，或在配置中指定正确路径
 3. **邮件配置**：需要正确的SMTP服务器信息和授权码（不是登录密码）
 4. **摄像头权限**：Linux系统可能需要添加用户到video组
 5. **防火墙**：确保5000端口未被防火墙阻挡
 6. **A1打印机**：需要在配置中正确设置IP地址、访问代码和序列号
-7. **Docker部署**：⚠️ **尚未经过完整测试，生产环境请谨慎使用**
+7. **Docker部署**：请参考 [docker/README.md](docker/README.md) 进行部署
 
 ## 故障排查
 
@@ -321,7 +328,7 @@ sudo usermod -aG video $USER
 - 检查打印机固件版本是否支持MQTT
 
 ### 模型加载失败
-- 检查 `best.pt` 文件是否存在
+- 检查 `YOLO/best.pt` 文件是否存在
 - 检查PyTorch和ultralytics版本兼容性
 
 ### 邮件发送失败
@@ -337,7 +344,7 @@ sudo usermod -aG video $USER
 ## 开发计划
 
 - [ ] 支持更多打印机品牌（Klipper等）
-- [ ] 完善Docker部署测试
+- [x] 完善Docker部署测试
 - [ ] 优化检测算法，降低误报率
 - [ ] 支持多打印机同时监控
 - [ ] 添加模型在线更新功能
