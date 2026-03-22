@@ -331,6 +331,34 @@ def main():
                 if image_path is None:
                     continue
 
+                # ───────────── 检测步骤 1.5: 亮度检测 ─────────────
+                # 加载图片进行亮度检测
+                img_for_brightness = cv2.imread(image_path)
+                if img_for_brightness is not None:
+                    # 转换为灰度图
+                    gray = cv2.cvtColor(img_for_brightness, cv2.COLOR_BGR2GRAY)
+                    
+                    # 使用多种指标综合评估亮度，避免LED过曝或极端值影响
+                    mean_brightness = np.mean(gray)           # 平均值
+                    median_brightness = np.median(gray)       # 中位数（更鲁棒，不受极端值影响）
+                    percentile_25 = np.percentile(gray, 25)   # 25%分位数（暗部亮度）
+                    
+                    # 综合亮度评分：中位数占主要权重，暗部亮度占次要权重
+                    # 这样可以避免LED过曝拉高平均值，同时确保暗部不要太黑
+                    composite_brightness = median_brightness * 0.6 + percentile_25 * 0.4
+                    
+                    # 获取亮度阈值配置，默认35（综合评分建议稍高一些）
+                    brightness_threshold = config.get_float('monitoring.brightness_threshold', 35.0)
+                    
+                    print(f"  -> 亮度检测 - 均值:{mean_brightness:.1f} 中位数:{median_brightness:.1f} "
+                          f"25%分位:{percentile_25:.1f} 综合评分:{composite_brightness:.1f} (阈值:{brightness_threshold})")
+                    
+                    # 使用综合评分判断，更鲁棒
+                    if composite_brightness < brightness_threshold:
+                        print(f"  -> 亮度过低，跳过本次检测")
+                        last_time = time.time()
+                        continue
+
                 # ───────────── 检测步骤 2: YOLO 推理 ─────────────
                 # 获取检测阈值
                 conf_threshold = config.get_float('model.conf_threshold', 0.25)
