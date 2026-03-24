@@ -13,7 +13,7 @@ debug:
 
 # ───────────── 模型配置 ─────────────
 model:
-  path: "best.pt"                     # YOLO 模型文件路径
+  path: "YOLO/best.pt"                # YOLO 模型文件路径（相对于项目根目录）
   conf_threshold: 0.5                 # 检测置信度阈值 (0.0-1.0)
 
 # ───────────── 多帧检测配置 ─────────────
@@ -21,13 +21,13 @@ model:
 multi_frame:
   enabled: true                       # 是否启用多帧检测
   required_frames: 5                  # 阳性帧数达到此值后验证面积
-  alert_conf_threshold: 0.65           # 置信度阈值 (0.0-1.0)
+  alert_conf_threshold: 0.65          # 单帧置信度阈值 (0.0-1.0)
   area_threshold: 900                 # 面积阈值 (像素²)
 
 # ───────────── 监控配置 ─────────────
 monitoring:
   interval_sec: 3                     # 检测间隔（秒）
-  brightness_threshold: 30.0          # 亮度阈值 (0-255)，低于此值跳过检测，避免夜间或光线不足时浪费算力
+  brightness_threshold: 85            # 亮度阈值 (0-255)，低于此值跳过检测（避免夜间或光线不足时浪费算力）
 
 # ───────────── 摄像头配置 ─────────────
 camera:
@@ -40,10 +40,10 @@ camera:
   max_predicted: 1                    # predicted目录保留最新图片数量
   roi:
     enabled: false                    # 是否启用ROI区域检测（true、false）
-    x1: 100                            # 左上角X坐标
-    y1: 100                            # 左上角Y坐标
-    x2: 540                            # 右下角X坐标
-    y2: 380                            # 右下角Y坐标
+    x1: 100                           # 左上角X坐标
+    y1: 100                           # 左上角Y坐标
+    x2: 540                           # 右下角X坐标
+    y2: 380                           # 右下角Y坐标
 
 # ───────────── 目录配置 ─────────────
 directories:
@@ -71,3 +71,4 @@ printer:
 # ───────────── 程序设置 ─────────────
 app:
   web_url: "http://localhost:5000"     # Web监控页面地址（用于邮件告警）
+  web_port: 5000                       # Web服务器端口
