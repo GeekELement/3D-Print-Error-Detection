@@ -204,4 +204,5 @@ def is_printer_connected():
     return printer and printer.mqtt_client_connected()
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5000)
+    web_port = config.get_int('app.web_port', 5000)
+    socketio.run(app, debug=True, port=web_port)

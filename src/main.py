@@ -22,12 +22,13 @@ import bambulabs_api as bl
 def start_web_app():
     """在后台线程中启动 web 应用"""
     import webui as web_module
-    print("Web 应用已启动，访问 http://localhost:5000 查看监控面板")
-    
+    web_port = config.get_int('app.web_port', 5000)
+    print(f"Web 应用已启动，访问 http://localhost:{web_port} 查看监控面板")
+
     # 使用socketio的background task来自动连接（在socketio上下文内）
     web_module.socketio.start_background_task(auto_connect_and_notify)
-    
-    web_module.socketio.run(web_module.app, host='0.0.0.0', port=5000, debug=False, log_output=False, allow_unsafe_werkzeug=True)
+
+    web_module.socketio.run(web_module.app, host='0.0.0.0', port=web_port, debug=False, log_output=False, allow_unsafe_werkzeug=True)
 
 def auto_connect_and_notify():
     """自动连接并通知前端"""

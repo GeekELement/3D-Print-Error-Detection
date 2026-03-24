@@ -23,6 +23,7 @@
 - **🐛 调试模式**：支持视频文件测试，可控制取帧间隔
 - **📡 MQTT支持**：通过MQTT协议连接Bambu Lab打印机
 - **🐳 Docker部署**：支持Docker容器化部署（Linux服务器）
+- **💡 亮度检测**：自动检测环境亮度，光线不足时跳过检测，避免浪费算力
 
 ## 技术栈
 
@@ -69,7 +70,47 @@
    python src/main.py
    ```
 
-#### 方式二：Docker部署（Linux服务器）
+#### 方式二：使用启动脚本（Linux服务器推荐）
+
+适用于需要后台运行、开机自启或定时检查的场景。
+
+1. **上传项目到Linux服务器**
+   ```bash
+   scp -r 3D_Print_Error_Detection user@server:/opt/
+   ```
+
+2. **配置启动脚本**
+   ```bash
+   cd /opt/3D_Print_Error_Detection/src
+   chmod +x start.sh
+   ```
+   编辑 `start.sh`，修改以下配置：
+   - `PROJECT_DIR`: 项目根目录路径
+   - `CONDA_BASE`: Conda 安装路径
+   - `CONDA_ENV`: Conda 环境名称
+   - `DISPLAY_HOST`/`DISPLAY_PORT`: 启动提示信息中显示的地址和端口
+
+3. **运行启动脚本**
+   ```bash
+   ./start.sh
+   ```
+
+4. **添加到定时任务（可选）**
+   实现开机自启或定时检查服务状态：
+   ```bash
+   crontab -e
+   # 每5分钟检查一次，如果服务未运行则自动启动
+   */5 * * * * /opt/3D_Print_Error_Detection/src/start.sh >/dev/null 2>&1
+   ```
+
+**脚本功能说明：**
+- 自动激活 Conda 环境
+- 单实例保护（防止重复启动）
+- 后台运行主程序（nohup）
+- 自动记录日志到 `logs/script.log`
+- 启动后显示 WebUI 访问地址
+
+#### 方式三：Docker部署（Linux服务器）
 
 1. **上传项目到Linux服务器**
    ```bash
@@ -88,6 +129,8 @@
    ```
    http://server-ip:5000
    ```
+
+   > 提示：可通过修改 `config.yaml` 中的 `app.web_port` 自定义端口
 
 更多Docker部署详情，请参考 [docker/README.md](docker/README.md)
 
@@ -122,7 +165,8 @@
 │   ├── alerter.py                # 邮件告警 + 打印机控制客户端
 │   ├── device.py                 # 设备管理（GPU/CPU）
 │   ├── webui.py                  # Web监控界面 (Flask + SocketIO)
-│   └── webui.html                # Web监控前端页面
+│   ├── webui.html                # Web监控前端页面
+│   └── start.sh                  # Linux启动脚本（后台运行+定时任务）
 └── docker/                       # Docker部署配置
     ├── Dockerfile                # Docker镜像构建文件
     ├── docker-compose.yml        # Docker Compose配置
@@ -158,6 +202,7 @@
 - **面积阈值过滤**：计算缺陷区域并集面积，避免小噪点干扰
 - **ROI区域过滤**：只检测指定区域内的缺陷
 - **打印状态检查**：A1模式下只在打印进行时检测
+- **亮度检测**：自动检测环境亮度，光线不足时跳过检测
 
 ### 5. 告警系统 (`alerter.py`)
 - SMTP邮件发送（支持SSL加密）
@@ -212,6 +257,7 @@ multi_frame:
 # ───────────── 监控配置 ─────────────
 monitoring:
   interval_sec: 3                     # 检测间隔（秒）
+  brightness_threshold: 85             # 亮度阈值 (0-255)，低于此值跳过检测（避免夜间或光线不足时浪费算力）
 
 # ───────────── 摄像头配置 ─────────────
 camera:
@@ -255,6 +301,7 @@ printer:
 # ───────────── 程序设置 ─────────────
 app:
   web_url: "http://localhost:5000"     # Web监控页面地址（用于邮件告警）
+  web_port: 5000                       # Web服务器端口
 ```
 
 完整配置请参考 `config.yaml.example`
@@ -280,6 +327,8 @@ python src/main.py
 http://localhost:5000
 ```
 
+> 如果修改了 `config.yaml` 中的 `app.web_port`，请使用对应端口访问
+
 Web界面功能：
 - **连接/断开打印机**：手动控制打印机连接
 - **实时状态显示**：打印状态、进度、当前层/总层数、喷嘴温度、热床温度
@@ -300,6 +349,7 @@ Web界面功能：
 2. **多帧确认**：连续检测到 `required_frames` 个阳性帧后才触发告警
 3. **面积计算**：多个spaghetti框的并集面积，避免重复计算
 4. **状态检查**：A1模式下，只在打印机状态为 PRINTING/RUNNING 时进行检测
+5. **亮度检测**：自动检测画面亮度，综合评分（中位数×0.6 + 25%分位数×0.4）低于 `brightness_threshold` 时跳过检测
 
 ## 注意事项
 
@@ -307,7 +357,7 @@ Web界面功能：
 2. **模型文件**：确保 `YOLO/best.pt` 存在于项目根目录，或在配置中指定正确路径
 3. **邮件配置**：需要正确的SMTP服务器信息和授权码（不是登录密码）
 4. **摄像头权限**：Linux系统可能需要添加用户到video组
-5. **防火墙**：确保5000端口未被防火墙阻挡
+5. **防火墙**：确保5000端口（或自定义的 `app.web_port`）未被防火墙阻挡
 6. **A1打印机**：需要在配置中正确设置IP地址、访问代码和序列号
 7. **Docker部署**：请参考 [docker/README.md](docker/README.md) 进行部署
 
@@ -339,7 +389,7 @@ sudo usermod -aG video $USER
 ### Docker部署问题
 - 检查Docker和Docker Compose版本
 - 查看容器日志：`docker logs print-detector`
-- 检查端口占用：`netstat -tlnp | grep 5000`
+- 检查端口占用：`netstat -tlnp | grep 5000`（或自定义端口）
 
 ## 开发计划
 
