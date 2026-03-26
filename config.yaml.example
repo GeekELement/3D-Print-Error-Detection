@@ -27,8 +27,9 @@ multi_frame:
 # ───────────── 监控配置 ─────────────
 monitoring:
   interval_sec: 3                     # 检测间隔（秒）
-  brightness_threshold: 85            # 亮度阈值 (0-255)，低于此值跳过检测（避免夜间或光线不足时浪费算力）
-
+  brightness_threshold: 20            # 亮度阈值 (0-255)，低于此值跳过检测，避免夜间或光线不足时浪费算力
+  blur_threshold: 100                # 模糊检测阈值，低于此值判定为模糊图片并跳过（Laplacian方差值）
+  
 # ───────────── 摄像头配置 ─────────────
 camera:
   source: local                        # 相机来源: local=本机摄像头, a1=从打印机获取(A1打印机), 视频模式自动切换
