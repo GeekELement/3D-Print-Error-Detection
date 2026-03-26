@@ -338,25 +338,61 @@ def main():
                 if img_for_brightness is not None:
                     # 转换为灰度图
                     gray = cv2.cvtColor(img_for_brightness, cv2.COLOR_BGR2GRAY)
-                    
+
+                    # 使用ROI区域进行亮度检测（如果配置了ROI）
+                    if roi_box:
+                        rx1, ry1, rx2, ry2 = roi_box
+                        roi_gray = gray[ry1:ry2, rx1:rx2]
+                        roi_desc = "ROI"
+                    else:
+                        # 未配置ROI时使用全图
+                        roi_gray = gray
+                        roi_desc = "全图"
+
                     # 使用多种指标综合评估亮度，避免LED过曝或极端值影响
-                    mean_brightness = np.mean(gray)           # 平均值
-                    median_brightness = np.median(gray)       # 中位数（更鲁棒，不受极端值影响）
-                    percentile_25 = np.percentile(gray, 25)   # 25%分位数（暗部亮度）
-                    
+                    mean_brightness = np.mean(roi_gray)           # 平均值
+                    median_brightness = np.median(roi_gray)       # 中位数（更鲁棒，不受极端值影响）
+                    percentile_25 = np.percentile(roi_gray, 25)   # 25%分位数（暗部亮度）
+
                     # 综合亮度评分：中位数占主要权重，暗部亮度占次要权重
                     # 这样可以避免LED过曝拉高平均值，同时确保暗部不要太黑
                     composite_brightness = median_brightness * 0.6 + percentile_25 * 0.4
-                    
+
                     # 获取亮度阈值配置，默认35（综合评分建议稍高一些）
                     brightness_threshold = config.get_float('monitoring.brightness_threshold', 35.0)
-                    
-                    print(f"  -> 亮度检测 - 均值:{mean_brightness:.1f} 中位数:{median_brightness:.1f} "
+
+                    print(f"  -> 亮度检测({roi_desc}) - 均值:{mean_brightness:.1f} 中位数:{median_brightness:.1f} "
                           f"25%分位:{percentile_25:.1f} 综合评分:{composite_brightness:.1f} (阈值:{brightness_threshold})")
-                    
+
                     # 使用综合评分判断，更鲁棒
                     if composite_brightness < brightness_threshold:
                         print(f"  -> 亮度过低，跳过本次检测")
+                        last_time = time.time()
+                        continue
+
+                # ───────────── 检测步骤 1.6: 模糊检测 ─────────────
+                if img_for_brightness is not None:
+                    # 使用ROI区域进行模糊检测（如果配置了ROI）
+                    if roi_box:
+                        rx1, ry1, rx2, ry2 = roi_box
+                        roi_gray = gray[ry1:ry2, rx1:rx2]
+                        roi_desc = f"ROI({rx1},{ry1})->({rx2},{ry2})"
+                    else:
+                        # 未配置ROI时使用全图
+                        roi_gray = gray
+                        roi_desc = "全图"
+
+                    # 使用拉普拉斯算子计算清晰度
+                    laplacian_var = cv2.Laplacian(roi_gray, cv2.CV_64F).var()
+
+                    # 获取模糊阈值配置，默认100（值越小表示越模糊）
+                    blur_threshold = config.get_float('monitoring.blur_threshold', 100.0)
+
+                    print(f"  -> 模糊检测 - {roi_desc} 清晰度:{laplacian_var:.1f} (阈值:{blur_threshold})")
+
+                    # 如果清晰度低于阈值，说明图片过于模糊
+                    if laplacian_var < blur_threshold:
+                        print(f"  -> 图片过于模糊，跳过本次检测")
                         last_time = time.time()
                         continue
 
