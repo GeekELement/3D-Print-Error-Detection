@@ -335,7 +335,8 @@ def main():
                 # ───────────── 检测步骤 1.5: 亮度检测 ─────────────
                 # 加载图片进行亮度检测
                 img_for_brightness = cv2.imread(image_path)
-                if img_for_brightness is not None:
+                brightness_check_enabled = config.get_bool('monitoring.brightness_check_enabled', True)
+                if brightness_check_enabled and img_for_brightness is not None:
                     # 转换为灰度图
                     gray = cv2.cvtColor(img_for_brightness, cv2.COLOR_BGR2GRAY)
 
@@ -371,7 +372,8 @@ def main():
                         continue
 
                 # ───────────── 检测步骤 1.6: 模糊检测 ─────────────
-                if img_for_brightness is not None:
+                blur_check_enabled = config.get_bool('monitoring.blur_check_enabled', True)
+                if blur_check_enabled and img_for_brightness is not None:
                     # 使用ROI区域进行模糊检测（如果配置了ROI）
                     if roi_box:
                         rx1, ry1, rx2, ry2 = roi_box

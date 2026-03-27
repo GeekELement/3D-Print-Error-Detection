@@ -27,8 +27,10 @@ multi_frame:
 # ───────────── 监控配置 ─────────────
 monitoring:
   interval_sec: 3                     # 检测间隔（秒）
+  brightness_check_enabled: true      # 是否启用亮度检测
   brightness_threshold: 20            # 亮度阈值 (0-255)，低于此值跳过检测，避免夜间或光线不足时浪费算力
-  blur_threshold: 100                # 模糊检测阈值，低于此值判定为模糊图片并跳过（Laplacian方差值）
+  blur_check_enabled: true            # 是否启用模糊检测
+  blur_threshold: 100                 # 模糊检测阈值，低于此值判定为模糊图片并跳过（Laplacian方差值）
   
 # ───────────── 摄像头配置 ─────────────
 camera:
@@ -40,7 +42,7 @@ camera:
   max_captured: 1                     # captured目录保留最新图片数量
   max_predicted: 1                    # predicted目录保留最新图片数量
   roi:
-    enabled: false                    # 是否启用ROI区域检测（true、false）
+    enabled: false                    # 是否启用YOLO ROI区域检测（true、false）
     x1: 100                           # 左上角X坐标
     y1: 100                           # 左上角Y坐标
     x2: 540                           # 右下角X坐标
