@@ -233,7 +233,7 @@ def main():
     else:
         camera = Camera(camera_index=config.get_int('camera.index', 0))
 
-    # 6. 加载YOLOv8模型
+    # 6. 加载YOLO模型
     print("加载 YOLO 模型...")
     try:
         model = YOLO(config.get_str('model_path_abs', ''))
